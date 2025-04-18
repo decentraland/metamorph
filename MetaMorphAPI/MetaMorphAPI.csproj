@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="3.7.400" />
+        <PackageReference Include="AWSSDK.S3" Version="3.7.416.6" />
+        <PackageReference Include="AWSSDK.SQS" Version="3.7.400.131" />
+        <PackageReference Include="FFMpegCore" Version="5.2.0" />
+        <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.6.0" />
+        <PackageReference Include="Mime-Detective" Version="24.12.2" />
+        <PackageReference Include="Mime-Detective.Definitions.Condensed" Version="24.12.2" />
+        <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+        <PackageReference Include="StackExchange.Redis" Version="2.8.31" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Include="..\.dockerignore">
+        <Link>.dockerignore</Link>
+      </Content>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="temp\" />
+      <Folder Include="wwwroot\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <_ContentIncludedByDefault Remove="wwwroot\converted\0c25210d62d06606ebf3534fd1417f851d1d894163baf9e824eb9d50b5c97785.ktx2" />
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,33 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MetaMorphAPI", "MetaMorphAPI\MetaMorphAPI.csproj", "{6E840E14-714C-459C-BE47-8A2D50D86C8A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{DCD88175-80C1-446E-BF0A-481BE73A942D}"
+	ProjectSection(SolutionItems) = preProject
+		compose.yaml = compose.yaml
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests", "Tests\Tests.csproj", "{CFB461FC-D749-4858-8EED-751573811836}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MetaMorphWorker", "MetaMorphWorker\MetaMorphWorker.csproj", "{57C507DB-F71B-44F0-BBDC-575F4CE2BCE0}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6E840E14-714C-459C-BE47-8A2D50D86C8A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6E840E14-714C-459C-BE47-8A2D50D86C8A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6E840E14-714C-459C-BE47-8A2D50D86C8A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6E840E14-714C-459C-BE47-8A2D50D86C8A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CFB461FC-D749-4858-8EED-751573811836}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CFB461FC-D749-4858-8EED-751573811836}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CFB461FC-D749-4858-8EED-751573811836}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CFB461FC-D749-4858-8EED-751573811836}.Release|Any CPU.Build.0 = Release|Any CPU
+		{57C507DB-F71B-44F0-BBDC-575F4CE2BCE0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{57C507DB-F71B-44F0-BBDC-575F4CE2BCE0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{57C507DB-F71B-44F0-BBDC-575F4CE2BCE0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{57C507DB-F71B-44F0-BBDC-575F4CE2BCE0}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

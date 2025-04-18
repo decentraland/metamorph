@@ -1,0 +1,59 @@
+services:
+  localstack:
+    image: localstack/localstack
+    container_name: metamorph_localstack
+    environment:
+      - SERVICES=s3,sqs
+    ports:
+      - "4566:4566"
+  
+  metamorphapi:
+    build:
+      context: .
+      dockerfile: MetaMorphAPI/Dockerfile
+    image: metamorphapi:latest
+    ports:
+      - "5133:8080"
+      - "7053:8081"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - REDIS__ConnectionString=redis:6379
+      - AWS__ServiceURL=http://localstack:4566
+      - S3_PUBLIC_HOST=127.0.0.1
+    depends_on:
+      - redis
+      - localstack
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8080/health || exit 1" ]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+
+  metamorphworker:
+    build:
+      context: .
+      dockerfile: MetaMorphWorker/Dockerfile
+    image: metamorphworker:latest
+    depends_on:
+      metamorphapi:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      localstack:
+        condition: service_started
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - REDIS__ConnectionString=redis:6379
+      - AWS__ServiceURL=http://localstack:4566
+    restart: unless-stopped
+
+  redis:
+    image: redis:latest
+    container_name: metamorph_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: [ "redis-server", "--appendonly", "no" ]
+    tmpfs:
+      - /data
