@@ -17,7 +17,7 @@ services:
       - "7053:8081"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - REDIS__ConnectionString=redis:6379
+      - Redis__ConnectionString=redis:6379
       - AWS__ServiceURL=http://localstack:4566
       - S3_PUBLIC_HOST=127.0.0.1
     depends_on:
@@ -44,7 +44,7 @@ services:
         condition: service_started
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - REDIS__ConnectionString=redis:6379
+      - Redis__ConnectionString=redis:6379
       - AWS__ServiceURL=http://localstack:4566
     restart: unless-stopped
 

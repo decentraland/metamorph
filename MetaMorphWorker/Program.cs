@@ -32,8 +32,6 @@ builder.Services.AddHostedService<ConversionBackgroundService>();
 
 // Params
 var awsServiceUrl = GetRequiredConfig<string>("AWS:ServiceURL");
-var awsAccessKeyId = GetRequiredConfig<string>("AWS:AccessKeyId");
-var awsSecretAccessKey = GetRequiredConfig<string>("AWS:SecretAccessKey");
 var sqsQueueUrl = GetRequiredConfig<string>("AWS:SQSQueueURL");
 var s3BucketName = GetRequiredConfig<string>("AWS:S3BucketName");
 var s3ForcePathStyle = GetRequiredConfig<bool>("AWS:S3ForcePathStyle");
@@ -44,7 +42,7 @@ builder.Services.AddSingleton<ConnectionMultiplexer>(_ => ConnectionMultiplexer.
 
 // SQS
 var sqsConfig = new AmazonSQSConfig { ServiceURL = awsServiceUrl };
-var sqsClient = new AmazonSQSClient(awsAccessKeyId, awsSecretAccessKey, sqsConfig);
+var sqsClient = new AmazonSQSClient(sqsConfig);
 builder.Services.AddSingleton<IAmazonSQS>(sqsClient);
 builder.Services.AddSingleton<IConversionQueue>(sp => new RemoteConversionQueue(sqsClient, sqsQueueUrl,
     sp.GetRequiredService<ConnectionMultiplexer>(), sp.GetRequiredService<ILogger<RemoteConversionQueue>>()));
@@ -55,7 +53,7 @@ var s3Config = new AmazonS3Config
     ServiceURL = awsServiceUrl,
     ForcePathStyle = s3ForcePathStyle
 };
-var s3Client = new AmazonS3Client(awsAccessKeyId, awsSecretAccessKey, s3Config);
+var s3Client = new AmazonS3Client(s3Config);
 builder.Services.AddSingleton<IAmazonS3>(s3Client);
 
 // Register the RemoteCacheService with all its dependencies.
