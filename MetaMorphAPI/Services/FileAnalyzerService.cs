@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 using MimeDetective;
 using MimeDetective.Definitions;
 using MimeDetective.Storage;
@@ -6,11 +8,70 @@ namespace MetaMorphAPI.Services;
 
 public class FileAnalyzerService
 {
-    private readonly IContentInspector _contentInspector = new ContentInspectorBuilder
+    private readonly IContentInspector _contentInspector;
+
+    public FileAnalyzerService()
     {
-        Definitions = DefaultDefinitions.All()
-    }.Build();
-    
+        var definitions = new List<Definition>();
+
+        // All default video and image definitions
+        definitions.AddRange(DefaultDefinitions.FileTypes.Images.All());
+        definitions.AddRange(DefaultDefinitions.FileTypes.Video.All());
+
+        // SVG is not included in default definitions so we add it manually
+        // TODO: Do we need to add other SVG formats here (binary ones and such...)
+        definitions.Add(new Definition
+        {
+            File = new FileType
+            {
+                Extensions = ImmutableCollectionsMarshal.AsImmutableArray<string>(["svg"]),
+                MimeType = "image/svg+xml",
+                Categories = ImmutableHashSet.Create(Category.Image)
+            },
+            Signature = ((IEnumerable<Segment>)
+            [
+                PrefixSegment.Create(0, "3C 73 76 67 20")
+            ]).ToSignature()
+        });
+
+        // Custom definitions for finding animated WebP's
+        definitions.Add(new Definition
+        {
+            File = new FileType
+            {
+                Extensions = ImmutableCollectionsMarshal.AsImmutableArray(["webp"]),
+                MimeType = "image/webp+animated",
+                Categories = ImmutableHashSet.Create(Category.Image)
+            },
+            Signature = ((IEnumerable<Segment>)
+            [
+                StringSegment.Create("ANIM"),
+                PrefixSegment.Create(0, "52 49 46 46"),
+                PrefixSegment.Create(8, "57 45 42 50")
+            ]).ToSignature()
+        });
+        definitions.Add(new Definition
+        {
+            File = new FileType
+            {
+                Extensions = ImmutableCollectionsMarshal.AsImmutableArray(["webp"]),
+                MimeType = "image/webp+animated",
+                Categories = ImmutableHashSet.Create(Category.Image)
+            },
+            Signature = ((IEnumerable<Segment>)
+            [
+                StringSegment.Create("ANMF"),
+                PrefixSegment.Create(0, "52 49 46 46"),
+                PrefixSegment.Create(8, "57 45 42 50")
+            ]).ToSignature()
+        });
+
+        _contentInspector = new ContentInspectorBuilder
+        {
+            Definitions = definitions
+        }.Build();
+    }
+
     public async Task<FormatCategory> GetFileType(string inputPath)
     {
         // Read only the header (4 KB) rather than the entire file.
@@ -39,15 +100,16 @@ public class FileAnalyzerService
         var categories = definition.File.Categories;
         var mime = definition.File.MimeType?.ToLowerInvariant();
 
-        // If it's a WebP, check for animation.
-        if (mime == "image/webp")
+        // Special cases
+        switch (mime)
         {
-            return ContainsWebPAnimChunk(headerBytes) ? FormatCategory.MotionImage : FormatCategory.StaticImage;
+            // Custom mime for animated WebP's defined above
+            case "image/webp+animated":
+                return FormatCategory.MotionImage;
+            // GIFs (animated graphics) are treated as videos since ffmpeg can convert them directly.
+            case "image/gif":
+                return FormatCategory.MotionVideo;
         }
-
-        // GIFs (animated graphics) are treated as videos since ffmpeg can convert them directly.
-        if (mime == "image/gif")
-            return FormatCategory.MotionVideo;
 
         if (categories.Contains(Category.Video))
             return FormatCategory.MotionVideo;
@@ -57,30 +119,6 @@ public class FileAnalyzerService
 
         return FormatCategory.Other;
     }
-    
-    private bool ContainsWebPAnimChunk(byte[] headerBytes)
-    {
-        // Check for the "ANIM" chunk signature in the given header buffer.
-        var animSignature = "ANIM"u8.ToArray();
-        for (int i = 0; i <= headerBytes.Length - animSignature.Length; i++)
-        {
-            bool found = true;
-            for (int j = 0; j < animSignature.Length; j++)
-            {
-                if (headerBytes[i + j] != animSignature[j])
-                {
-                    found = false;
-                    break;
-                }
-            }
-
-            if (found)
-                return true;
-        }
-
-        return false;
-    }
-
 }
 
 public enum FormatCategory

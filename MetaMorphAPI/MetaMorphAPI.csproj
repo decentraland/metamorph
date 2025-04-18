@@ -10,12 +10,11 @@
 
     <ItemGroup>
         <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="3.7.400" />
-        <PackageReference Include="AWSSDK.S3" Version="3.7.416.6" />
-        <PackageReference Include="AWSSDK.SQS" Version="3.7.400.131" />
+        <PackageReference Include="AWSSDK.S3" Version="3.7.416.12" />
+        <PackageReference Include="AWSSDK.SQS" Version="3.7.400.136" />
         <PackageReference Include="FFMpegCore" Version="5.2.0" />
         <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.6.0" />
-        <PackageReference Include="Mime-Detective" Version="24.12.2" />
-        <PackageReference Include="Mime-Detective.Definitions.Condensed" Version="24.12.2" />
+        <PackageReference Include="Mime-Detective" Version="25.4.15" />
         <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
         <PackageReference Include="StackExchange.Redis" Version="2.8.31" />
     </ItemGroup>

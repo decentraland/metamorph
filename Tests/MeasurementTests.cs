@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Tests;
 
+[Explicit]
 public class MeasurementTests
 {
     private ConverterService _converterService;
@@ -46,7 +47,7 @@ public class MeasurementTests
 
         stopwatch.Stop();
 
-        TestContext.WriteLine($"{stopwatch.ElapsedMilliseconds}ms");
+        await TestContext.Out.WriteLineAsync($"{stopwatch.ElapsedMilliseconds}ms");
 
         Assert.That(File.Exists(outputPath), Is.True);
     }
@@ -59,8 +60,8 @@ public class MeasurementTests
 
     private static IEnumerable<string> AllImages(string fileName)
     {
-        var root = Path.Combine(TestContext.CurrentContext.TestDirectory, "Assets");
+        var root = Path.Combine(TestContext.CurrentContext.TestDirectory, "Assets", "measurement");
         return Directory.GetFiles(root, $"{fileName}.*", SearchOption.AllDirectories).Select(path =>
-            Path.Combine("Assets", path.Replace(root, string.Empty).Substring(1)));
+            Path.Combine("Assets", "measurement", path.Replace(root, string.Empty)[1..]));
     }
 }
