@@ -19,7 +19,9 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - Redis__ConnectionString=redis:6379
       - AWS__ServiceURL=http://localstack:4566
-      - S3_PUBLIC_HOST=127.0.0.1
+      - AWS__S3PublicHost=127.0.0.1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
     depends_on:
       - redis
       - localstack
@@ -46,6 +48,8 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - Redis__ConnectionString=redis:6379
       - AWS__ServiceURL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
     restart: unless-stopped
 
   redis:

@@ -14,8 +14,11 @@ namespace MetaMorphAPI.Controllers;
 public class ConvertController(
     ICacheService cacheService,
     IConversionQueue conversionQueue,
+    IConfiguration configuration,
     ILogger<ConvertController> logger) : ControllerBase
 {
+    private readonly string? _s3HostOverride = configuration["AWS:S3PublicHost"];
+    
     [HttpGet("/convert")]
     public async Task<IActionResult> Convert([FromQuery] string url)
     {
@@ -30,15 +33,11 @@ public class ConvertController(
 
         if (cachedURL != null)
         {
-            // cachedURL = cachedURL.Replace("localhost", "127.0.0.1"); // TODO: Remove, only for local testing
-            // cachedURL = cachedURL.Replace("localstack", "127.0.0.1"); // TODO: Remove, only for local testing
-            
             // Override S3 host for external redirects, if specified
-            var s3HostOverride = Environment.GetEnvironmentVariable("S3_PUBLIC_HOST");
-            if (!string.IsNullOrWhiteSpace(s3HostOverride))
+            if (!string.IsNullOrWhiteSpace(_s3HostOverride))
             {
                 var uri = new Uri(cachedURL);
-                var builder = new UriBuilder(uri) { Host = s3HostOverride };
+                var builder = new UriBuilder(uri) { Host = _s3HostOverride };
                 cachedURL = builder.Uri.ToString();
             }
             

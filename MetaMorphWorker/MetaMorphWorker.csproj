@@ -16,6 +16,12 @@
       <Content Include="..\.dockerignore">
         <Link>.dockerignore</Link>
       </Content>
+      <Content Include="..\MetaMorphAPI\appsettings.Development.json">
+        <Link>appsettings.Development.json</Link>
+      </Content>
+      <Content Include="..\MetaMorphAPI\appsettings.json">
+        <Link>appsettings.json</Link>
+      </Content>
     </ItemGroup>
 
     <ItemGroup>

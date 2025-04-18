@@ -8,9 +8,10 @@
       "applicationUrl": "http://localhost:5133",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "CACHE_MODE": "Local",
-        "LOCAL_WORKER": "true",
-        "START_LOCAL_INFRA": "true"
+        "MetaMorph__LocalCache": "true",
+        "MetaMorph__LocalWorker": "true",
+        "MetaMorph__StartLocalInfra": "true",
+        "AWS__S3PublicHost": ""
       }
     },
     "Local AWS": {
@@ -20,10 +21,8 @@
       "applicationUrl": "http://localhost:5133",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "CACHE_MODE": "Remote",
-        "LOCAL_WORKER": "true",
-        "START_LOCAL_INFRA": "true",
-        "S3_PUBLIC_HOST": "127.0.0.1",
+        "MetaMorph__LocalWorker": "true",
+        "MetaMorph__StartLocalInfra": "true",
         "AWS_ACCESS_KEY_ID": "test",
         "AWS_SECRET_ACCESS_KEY": "test"
       }

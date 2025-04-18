@@ -5,17 +5,17 @@ namespace MetaMorphAPI.Services.Queue;
 /// <summary>
 /// A local version of the conversion queue.
 /// </summary>
-public class LocalConversionQueue: IConversionQueue
+public class LocalConversionQueue : IConversionQueue
 {
     private readonly Channel<ConversionJob> _channel = Channel.CreateUnbounded<ConversionJob>();
 
-    public async Task Enqueue(ConversionJob job, CancellationToken ct = default)
+    public Task Enqueue(ConversionJob job, CancellationToken ct = default)
     {
-        await _channel.Writer.WriteAsync(job, ct);
+        return _channel.Writer.WriteAsync(job, ct).AsTask();
     }
 
-    public async Task<ConversionJob> Dequeue(CancellationToken ct = default)
+    public Task<ConversionJob> Dequeue(CancellationToken ct = default)
     {
-        return await _channel.Reader.ReadAsync(ct);
+        return _channel.Reader.ReadAsync(ct).AsTask();
     }
 }

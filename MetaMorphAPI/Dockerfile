@@ -35,7 +35,6 @@ ARG BUILD_CONFIGURATION=Release
 RUN dotnet publish "MetaMorphAPI.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
-ENV CACHE_MODE=Remote
 WORKDIR /app
 COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "MetaMorphAPI.dll"]
