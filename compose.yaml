@@ -12,6 +12,7 @@ services:
       context: .
       dockerfile: MetaMorphAPI/Dockerfile
     image: metamorphapi:latest
+    platform: linux/amd64
     ports:
       - "5133:8080"
       - "7053:8081"
@@ -27,7 +28,7 @@ services:
       - localstack
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:8080/health || exit 1" ]
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/health || exit 1" ]
       interval: 2s
       timeout: 5s
       retries: 5
@@ -37,6 +38,7 @@ services:
       context: .
       dockerfile: MetaMorphWorker/Dockerfile
     image: metamorphworker:latest
+    platform: linux/amd64
     depends_on:
       metamorphapi:
         condition: service_healthy
