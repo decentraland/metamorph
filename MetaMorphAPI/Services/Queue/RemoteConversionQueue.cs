@@ -31,9 +31,7 @@ public class RemoteConversionQueue(
         var request = new SendMessageRequest
         {
             QueueUrl = queueUrl,
-            MessageBody = messageBody,
-            // MessageGroupId = "conversion-group",
-            // MessageDeduplicationId = job.Hash
+            MessageBody = messageBody
         };
         await sqsClient.SendMessageAsync(request, ct);
     }
