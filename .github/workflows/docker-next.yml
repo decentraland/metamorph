@@ -1,0 +1,22 @@
+name: CI/CD on main branch
+
+on:
+  push:
+    branches:
+      - "main"
+
+jobs:
+  cd-metamorph-api:
+    uses: decentraland/platform-actions/.github/workflows/apps-docker-next.yml@main
+    with:
+      service-name: metamorph-api
+      dockerfile-url: https://raw.githubusercontent.com/decentraland/metamorph/main/MetaMorphAPI/Dockerfile
+      deployment-environment: dev
+    secrets: inherit
+  cd-metamorph-worker:
+    uses: decentraland/platform-actions/.github/workflows/apps-docker-next.yml@main
+    with:
+      service-name: metamorph-worker
+      dockerfile-url: https://raw.githubusercontent.com/decentraland/metamorph/main/MetaMorphWorker/Dockerfile
+      deployment-environment: dev
+    secrets: inherit
