@@ -8,7 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.SetupSerilog();
 
 // Create temp dir
-var tempDirectory = Path.Combine(builder.Environment.ContentRootPath, "temp");
+var tempDirectory = Path.Combine(Path.GetTempPath(), "metamorph");
 Directory.CreateDirectory(tempDirectory);
 
 // Add services to the container.
