@@ -63,6 +63,26 @@ public static class LocalInfra
             });
         }
     }
+    
+    /// <summary>
+    /// Ensures the Docker daemon is running.
+    /// </summary>
+    public static async Task EnsureDockerRunningAsync()
+    {
+        Log.Information("🔧 Checking Docker daemon...");
+
+        try
+        {
+            await ExecuteCommand("docker", "info");
+        }
+        catch
+        {
+            Log.Error("Could not connect to Docker daemon. Ensure Docker is installed and running.");
+            throw;
+        }
+
+        Log.Information("✅ Docker daemon is running.");
+    }
 
     public static async Task EnsureRedisRunningAsync()
     {

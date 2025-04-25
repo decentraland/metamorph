@@ -15,8 +15,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine AS base
 ARG TARGETARCH
 USER $APP_UID
 WORKDIR /app
-EXPOSE 5133
-EXPOSE 7053
+EXPOSE 8080
 
 # Install ffmpeg
 USER root

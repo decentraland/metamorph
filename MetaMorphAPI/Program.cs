@@ -1,20 +1,15 @@
 using MetaMorphAPI.Utils;
-using Microsoft.AspNetCore.StaticFiles;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Logging
+// Configure logging
 builder.SetupSerilog();
 
-// Create temp dir
-var tempDirectory = Path.Combine(Path.GetTempPath(), "metamorph");
-Directory.CreateDirectory(tempDirectory);
-
-// Add services to the container.
+// Add controllers to the application
 builder.Services.AddControllers();
 
-// Setup local worker if required
+// Configure a local worker if required
 var localWorker = builder.GetRequiredConfig<bool>("MetaMorph:LocalWorker");
 Log.Information("Using local worker: {LocalWorker}", localWorker);
 if (localWorker)
@@ -22,7 +17,7 @@ if (localWorker)
     builder.SetupConverter();
 }
 
-// Setup storage / cache mode from configuration.
+// Configure storage/cache based on configuration
 var localCache = builder.GetRequiredConfig<bool>("MetaMorph:LocalCache");
 Log.Information("Using local cache: {LocalCache}", localCache);
 if (localCache)
@@ -36,41 +31,22 @@ else
 
 var app = builder.Build();
 
-// Setup content types when serving local files
+// Configure static files for serving content
 if (localCache)
 {
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        ContentTypeProvider = new FileExtensionContentTypeProvider
-        {
-            Mappings =
-            {
-                [".ktx2"] = "image/ktx2"
-            }
-        }
-    });
+    app.SetupStaticFiles();
 }
 
-// Setup LocalStack
+// Configure LocalStack for development environment
 if (!localCache && app.Environment.IsDevelopment())
 {
-    using var scope = app.Services.CreateScope();
-
-    if (builder.GetRequiredConfig<bool>("MetaMorph:StartLocalInfra"))
-    {
-        await LocalInfra.EnsureLocalStackRunningAsync();
-        await LocalInfra.EnsureRedisRunningAsync();
-    }
-
-    await LocalInfra.SetupLocalStack(scope,
-        builder.GetRequiredConfig<string>("AWS:S3BucketName"),
-        builder.GetRequiredConfig<string>("AWS:SQSQueueName")
-    );
-
-    // Health endpoint for docker readiness check
-    app.MapGet("/health", () => Results.Ok());
+    await app.SetupLocalInfrastructureAsync(builder);
 }
 
+// Map API controllers
 app.MapControllers();
+
+// For the load balancer
+app.SetupHealthCheck();
 
 app.Run();
