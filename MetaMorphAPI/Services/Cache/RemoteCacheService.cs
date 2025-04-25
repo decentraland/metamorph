@@ -9,8 +9,8 @@ namespace MetaMorphAPI.Services.Cache
     /// Production cache service that stores files in S3 and uses Redis to cache the S3 URL.
     /// </summary>
     public class RemoteCacheService(
-        IAmazonS3 s3Client,
-        string bucketName,
+        IAmazonS3? s3Client,
+        string? bucketName,
         ConnectionMultiplexer redis,
         ILogger<RemoteCacheService> logger)
         : ICacheService
@@ -23,6 +23,11 @@ namespace MetaMorphAPI.Services.Cache
         /// </summary>
         public async Task Store(string hash, string sourcePath)
         {
+            if (bucketName == null || s3Client == null)
+            {
+                throw new InvalidOperationException("Bucket name not configured");
+            }
+
             var extension = Path.GetExtension(sourcePath);
             var contentType = extension switch
             {

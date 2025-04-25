@@ -69,12 +69,11 @@ public static class BootstrapHelper
         builder.Services.AddSingleton<IConversionQueue, LocalConversionQueue>();
     }
 
-    public static void SetupRemoteCache(this IHostApplicationBuilder builder)
+    public static void SetupRemoteCache(this IHostApplicationBuilder builder, bool setupS3)
     {
         // Params
         var awsServiceUrl = builder.GetRequiredConfig<string>("AWS:ServiceURL");
         var sqsQueueUrl = builder.GetRequiredConfig<string>("AWS:SQSQueueURL");
-        var s3BucketName = builder.GetRequiredConfig<string>("AWS:S3BucketName");
         var s3ForcePathStyle = builder.GetRequiredConfig<bool>("AWS:S3ForcePathStyle");
         var redisConnectionString = builder.GetRequiredConfig<string>("Redis:ConnectionString");
 
@@ -93,18 +92,21 @@ public static class BootstrapHelper
                 sp.GetRequiredService<ILogger<RemoteConversionQueue>>()));
 
         // S3
-        var s3Client = new AmazonS3Client(new AmazonS3Config
+        if (setupS3)
         {
-            ServiceURL = awsServiceUrl,
-            ForcePathStyle = s3ForcePathStyle
-        });
-        builder.Services.AddSingleton<IAmazonS3>(s3Client);
+            var s3Client = new AmazonS3Client(new AmazonS3Config
+            {
+                ServiceURL = awsServiceUrl,
+                ForcePathStyle = s3ForcePathStyle
+            });
+            builder.Services.AddSingleton<IAmazonS3>(s3Client);
+        }
 
         // Register the RemoteCacheService
         builder.Services.AddSingleton<ICacheService>(sp =>
             new RemoteCacheService(
-                sp.GetRequiredService<IAmazonS3>(),
-                s3BucketName,
+                setupS3 ? sp.GetRequiredService<IAmazonS3>() : null,
+                setupS3 ? builder.GetRequiredConfig<string>("AWS:S3BucketName") : null,
                 sp.GetRequiredService<ConnectionMultiplexer>(),
                 sp.GetRequiredService<ILogger<RemoteCacheService>>()
             ));
