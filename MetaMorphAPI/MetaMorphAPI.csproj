@@ -15,6 +15,7 @@
         <PackageReference Include="FFMpegCore" Version="5.2.0" />
         <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.6.0" />
         <PackageReference Include="Mime-Detective" Version="25.4.15" />
+        <PackageReference Include="prometheus-net.AspNetCore" Version="8.2.1" />
         <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
         <PackageReference Include="StackExchange.Redis" Version="2.8.31" />
     </ItemGroup>

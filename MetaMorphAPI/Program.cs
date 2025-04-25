@@ -6,7 +6,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Configure logging
 builder.SetupSerilog();
 
-// Add controllers to the application
+// Add controllers and a health check
+builder.Services.AddHealthChecks();
 builder.Services.AddControllers();
 
 // Configure a local worker if required
@@ -42,6 +43,9 @@ if (!localCache && app.Environment.IsDevelopment())
 {
     await app.SetupLocalInfrastructureAsync(builder);
 }
+
+// Metrics
+app.SetupMetrics();
 
 // Map API controllers
 app.MapControllers();

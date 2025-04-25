@@ -3,7 +3,9 @@ using Amazon.SQS;
 using MetaMorphAPI.Services;
 using MetaMorphAPI.Services.Cache;
 using MetaMorphAPI.Services.Queue;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.StaticFiles;
+using Prometheus;
 using Serilog;
 using StackExchange.Redis;
 
@@ -140,10 +142,26 @@ public static class BootstrapHelper
         );
     }
 
+    public static void SetupMetrics(this WebApplication app)
+    {
+        app.MapMetrics();
+        app.UseHttpMetrics();
+    }
+
     public static void SetupHealthCheck(this WebApplication app)
     {
         // Health endpoint for docker readiness check
-        app.MapGet("/health/live", () => Results.Ok());
+        app.MapHealthChecks("/health/live", new HealthCheckOptions
+        {
+            // Don’t run any checks—just return Healthy
+            Predicate = _ => false,
+
+            ResponseWriter = async (context, _) =>
+            {
+                context.Response.ContentType = "text/plain";
+                await context.Response.WriteAsync("OK");
+            }
+        });
     }
 
     public static T GetRequiredConfig<T>(this IHostApplicationBuilder builder, string key)
