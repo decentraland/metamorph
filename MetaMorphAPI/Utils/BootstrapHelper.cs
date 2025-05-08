@@ -52,7 +52,9 @@ public static class BootstrapHelper
         builder.Services.AddSingleton<DownloadService>(sp =>
             new DownloadService(
                 tempDirectory,
-                sp.GetRequiredService<HttpClient>()));
+                sp.GetRequiredService<HttpClient>(),
+                builder.GetRequiredConfig<int>("MetaMorph:MaxDownloadFileSize")
+            ));
 
         builder.Services.AddHostedService<ConversionBackgroundService>();
     }
