@@ -23,6 +23,7 @@ var localCache = builder.GetRequiredConfig<bool>("MetaMorph:LocalCache");
 Log.Information("Using local cache: {LocalCache}", localCache);
 if (localCache)
 {
+    Log.Warning("Local cache mode does not handle concurrent requests for the same URL well.");
     builder.SetupLocalCache();
 }
 else

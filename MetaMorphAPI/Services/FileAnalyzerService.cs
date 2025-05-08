@@ -96,7 +96,7 @@ public class FileAnalyzerService
             throw new InvalidOperationException("Failed to determine file type");
         }
 
-        var definition = matches[0].Definition;
+        var definition = matches.Last().Definition;
         var categories = definition.File.Categories;
         var mime = definition.File.MimeType?.ToLowerInvariant();
 

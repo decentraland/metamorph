@@ -35,6 +35,10 @@ public static class BootstrapHelper
     public static void SetupConverter(this IHostApplicationBuilder builder)
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), TEMP_DIRECTORY_NAME);
+        if (Directory.Exists(tempDirectory))
+        {
+            Directory.Delete(tempDirectory, true);
+        }
         Directory.CreateDirectory(tempDirectory);
 
         builder.Services.AddHttpClient();

@@ -20,6 +20,7 @@ public class ConvertController(
     private readonly string? _s3HostOverride = configuration["AWS:S3PublicHost"];
     
     [HttpGet("/convert")]
+    [HttpHead("/convert")]
     public async Task<IActionResult> Convert([FromQuery] string url)
     {
         if (string.IsNullOrWhiteSpace(url))
