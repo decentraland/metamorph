@@ -20,7 +20,6 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - Redis__ConnectionString=redis:6379
       - AWS__ServiceURL=http://localstack:4566
-      - AWS__S3PublicHost=127.0.0.1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
     depends_on:
@@ -28,7 +27,7 @@ services:
       - localstack
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/health || exit 1" ]
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/health/live || exit 1" ]
       interval: 2s
       timeout: 5s
       retries: 5
@@ -50,10 +49,6 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - Redis__ConnectionString=redis:6379
       - AWS__ServiceURL=http://localstack:4566
-      - AWS__S3BucketName=metamorph-bucket
-      - AWS__S3PublicHost=127.0.0.1
-      - AWS__SQSQueueURL=http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/metamorph-queue
-      - AWS__SQSQueueName=metamorph-queue
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
     restart: unless-stopped

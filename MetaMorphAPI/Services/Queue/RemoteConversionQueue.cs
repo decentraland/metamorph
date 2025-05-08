@@ -10,12 +10,15 @@ namespace MetaMorphAPI.Services.Queue;
 /// </summary>
 public class RemoteConversionQueue(
     IAmazonSQS sqsClient,
-    string queueUrl,
+    string queueName,
     ConnectionMultiplexer redis,
     ILogger<RemoteConversionQueue> logger) : IConversionQueue
 {
     private readonly TimeSpan _conversionExpiry = TimeSpan.FromMinutes(10);
     private readonly IDatabase _redisDb = redis.GetDatabase();
+
+    private readonly Lazy<Task<string>> _queueUrlLazy =
+        new(async () => (await sqsClient.GetQueueUrlAsync(queueName)).QueueUrl);
 
     public async Task Enqueue(ConversionJob job, CancellationToken ct = default)
     {
@@ -30,7 +33,7 @@ public class RemoteConversionQueue(
         var messageBody = JsonSerializer.Serialize(job);
         var request = new SendMessageRequest
         {
-            QueueUrl = queueUrl,
+            QueueUrl = await _queueUrlLazy.Value,
             MessageBody = messageBody
         };
         await sqsClient.SendMessageAsync(request, ct);
@@ -44,7 +47,7 @@ public class RemoteConversionQueue(
 
             var request = new ReceiveMessageRequest
             {
-                QueueUrl = queueUrl,
+                QueueUrl = await _queueUrlLazy.Value,
                 MaxNumberOfMessages = 1,
                 WaitTimeSeconds = 20 // Long polling for up to 20 seconds
             };
@@ -60,7 +63,7 @@ public class RemoteConversionQueue(
                 // Delete the message from the queue after processing
                 await sqsClient.DeleteMessageAsync(new DeleteMessageRequest
                 {
-                    QueueUrl = queueUrl,
+                    QueueUrl = await _queueUrlLazy.Value,
                     ReceiptHandle = message.ReceiptHandle
                 }, ct);
 

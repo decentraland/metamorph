@@ -28,7 +28,7 @@ if (localCache)
 }
 else
 {
-    builder.SetupRemoteCache(localWorker); // With local worker we need to setup S3
+    builder.SetupRemoteCache(localWorker || builder.Environment.IsDevelopment()); // With local worker we need to setup S3
 }
 
 var app = builder.Build();

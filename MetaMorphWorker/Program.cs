@@ -1,10 +1,13 @@
 using MetaMorphAPI.Utils;
+using Microsoft.AspNetCore.Builder;
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 builder.SetupSerilog();
 builder.SetupConverter();
 builder.SetupRemoteCache(true);
 
-var host = builder.Build();
-host.Run();
+var app = builder.Build();
+app.SetupMetrics();
+app.SetupMetrics();
+app.Run();

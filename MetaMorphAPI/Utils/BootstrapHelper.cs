@@ -77,10 +77,10 @@ public static class BootstrapHelper
 
     public static void SetupRemoteCache(this IHostApplicationBuilder builder, bool setupS3)
     {
+        builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
+
         // Params
-        var awsServiceUrl = builder.GetRequiredConfig<string>("AWS:ServiceURL");
-        var sqsQueueUrl = builder.GetRequiredConfig<string>("AWS:SQSQueueURL");
-        var s3ForcePathStyle = builder.GetRequiredConfig<bool>("AWS:S3ForcePathStyle");
+        var sqsQueueName = builder.GetRequiredConfig<string>("AWS:SQSQueueName");
         var redisConnectionString = builder.GetRequiredConfig<string>("Redis:ConnectionString");
 
         // Redis
@@ -88,24 +88,18 @@ public static class BootstrapHelper
             ConnectionMultiplexer.Connect(redisConnectionString));
 
         // SQS
-        var sqsClient = new AmazonSQSClient(new AmazonSQSConfig { ServiceURL = awsServiceUrl });
-        builder.Services.AddSingleton<IAmazonSQS>(sqsClient);
+        builder.Services.AddAWSService<IAmazonSQS>();
         builder.Services.AddSingleton<IConversionQueue>(sp =>
             new RemoteConversionQueue(
-                sqsClient,
-                sqsQueueUrl,
+                sp.GetRequiredService<IAmazonSQS>(),
+                sqsQueueName,
                 sp.GetRequiredService<ConnectionMultiplexer>(),
                 sp.GetRequiredService<ILogger<RemoteConversionQueue>>()));
 
         // S3
         if (setupS3)
         {
-            var s3Client = new AmazonS3Client(new AmazonS3Config
-            {
-                ServiceURL = awsServiceUrl,
-                ForcePathStyle = s3ForcePathStyle
-            });
-            builder.Services.AddSingleton<IAmazonS3>(s3Client);
+            builder.Services.AddAWSService<IAmazonS3>(builder.Configuration.GetAWSOptions<AmazonS3Config>());
         }
 
         // Register the RemoteCacheService
