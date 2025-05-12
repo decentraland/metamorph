@@ -43,20 +43,19 @@ public class ConversionBackgroundService(
 
                 // Download and convert
                 var downloadPath = await downloadService.DownloadFile(conversionJob.URL, conversionJob.Hash);
-                var convertedPath = await converterService.Convert(downloadPath, conversionJob.Hash);
+                var (convertedPath, duration) = await converterService.Convert(downloadPath, conversionJob.Hash);
 
                 File.Delete(downloadPath); // Cleanup
 
-                logger.LogInformation("Conversion completed successfully for {Hash} from {URL}",
-                    conversionJob.Hash, conversionJob.URL);
+                logger.LogInformation("Conversion completed successfully in {Duration:F1}s for {Hash}",
+                    duration.TotalSeconds, conversionJob.Hash);
 
                 // Push to cache
                 await cacheService.Store(conversionJob.Hash, convertedPath);
 
                 File.Delete(convertedPath); // Cleanup
 
-                logger.LogInformation("Conversion cached successfully for {Hash} from {URL}",
-                    conversionJob.Hash, conversionJob.URL);
+                logger.LogInformation("Conversion cached successfully for {Hash}", conversionJob.Hash);
             }
             catch (Exception e) when (!ct.IsCancellationRequested)
             {

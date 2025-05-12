@@ -32,7 +32,7 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
     private const string TOKTX_ARGS =
         "--t2 --uastc --genmipmap --zcmp 3 --lower_left_maps_to_s0t0 --assign_oetf srgb \"{0}\" \"{1}\"";
 
-    public async Task<string> Convert(string inputPath, string hash)
+    public async Task<(string path, TimeSpan duration)> Convert(string inputPath, string hash)
     {
         var fileType = await fileAnalyzer.GetFileType(inputPath);
 
@@ -47,7 +47,7 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
         };
     }
 
-    private async Task<string> ConvertImage(string inputPath, string hash)
+    private async Task<(string path, TimeSpan duration)> ConvertImage(string inputPath, string hash)
     {
         // Metrics
         var sizeBucket = GetMetricsSizeBucket(new FileInfo(inputPath).Length);
@@ -65,10 +65,10 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
         // Cleanup
         File.Delete(preConvertedPath);
 
-        return destinationPath;
+        return (destinationPath, timer.ObserveDuration());
     }
 
-    private async Task<string> ConvertVideo(string inputPath, string hash)
+    private async Task<(string path, TimeSpan duration)> ConvertVideo(string inputPath, string hash)
     {
         // Metrics
         var sizeBucket = GetMetricsSizeBucket(new FileInfo(inputPath).Length);
@@ -81,10 +81,10 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
 
         if (!success) throw new InvalidOperationException("Failed to convert to video");
 
-        return destinationPath;
+        return (destinationPath, timer.ObserveDuration());
     }
 
-    private async Task<string> ConvertFrames(string inputPath, string hash)
+    private async Task<(string path, TimeSpan duration)> ConvertFrames(string inputPath, string hash)
     {
         // Metrics
         var sizeBucket = GetMetricsSizeBucket(new FileInfo(inputPath).Length);
@@ -118,7 +118,7 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
 
         if (!success) throw new InvalidOperationException("Failed to convert to video");
 
-        return destinationPath;
+        return (destinationPath, timer.ObserveDuration());
     }
 
     private async Task<string> PreprocessImage(string inputPath)
