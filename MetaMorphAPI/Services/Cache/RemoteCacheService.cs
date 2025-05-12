@@ -1,3 +1,4 @@
+using System;
 using Amazon.S3;
 using Amazon.S3.Transfer;
 using MetaMorphAPI.Utils;
@@ -35,7 +36,7 @@ namespace MetaMorphAPI.Services.Cache
                 ".mp4" => "video/mp4",
                 _ => throw new InvalidOperationException($"Unrecognized file extension {extension}")
             };
-            var s3Key = $"{hash}{extension}";
+            var s3Key = $"{DateTime.Now:yyyyMMdd-HHmmss}-{hash}{extension}";
 
             try
             {
