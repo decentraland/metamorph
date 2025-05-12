@@ -2,6 +2,7 @@ using System.Diagnostics;
 using FFMpegCore;
 using FFMpegCore.Enums;
 using ImageMagick;
+using Prometheus;
 
 namespace MetaMorphAPI.Services;
 
@@ -10,13 +11,31 @@ namespace MetaMorphAPI.Services;
 /// </summary>
 public class ConverterService(string tempDirectory, FileAnalyzerService fileAnalyzer, ILogger<ConverterService> logger)
 {
+    private static readonly Histogram STATIC_IMAGE_HISTOGRAM = Metrics.CreateHistogram(
+        "media_conversion_static_image_duration_seconds",
+        "Duration of static image conversions in seconds.",
+        new HistogramConfiguration { LabelNames = ["size_bucket"] }
+    );
+
+    private static readonly Histogram MOTION_IMAGE_HISTOGRAM = Metrics.CreateHistogram(
+        "media_conversion_motion_image_duration_seconds",
+        "Duration of motion image conversions in seconds.",
+        new HistogramConfiguration { LabelNames = ["size_bucket"] }
+    );
+
+    private static readonly Histogram MOTION_VIDEO_HISTOGRAM = Metrics.CreateHistogram(
+        "media_conversion_motion_video_duration_seconds",
+        "Duration of motion video conversions in seconds.",
+        new HistogramConfiguration { LabelNames = ["size_bucket"] }
+    );
+
     private const string TOKTX_ARGS =
         "--t2 --uastc --genmipmap --zcmp 3 --lower_left_maps_to_s0t0 --assign_oetf srgb \"{0}\" \"{1}\"";
 
     public async Task<string> Convert(string inputPath, string hash)
     {
         var fileType = await fileAnalyzer.GetFileType(inputPath);
-        
+
         logger.LogDebug("Detected file type for {Hash}: {FileType}", hash, fileType);
 
         return fileType switch
@@ -30,6 +49,10 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
 
     private async Task<string> ConvertImage(string inputPath, string hash)
     {
+        // Metrics
+        var sizeBucket = GetMetricsSizeBucket(new FileInfo(inputPath).Length);
+        using var timer = STATIC_IMAGE_HISTOGRAM.WithLabels(sizeBucket).NewTimer();
+
         // Pre-convert
         logger.LogDebug("Pre converting {Hash}", hash);
         var preConvertedPath = await PreprocessImage(inputPath);
@@ -47,6 +70,10 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
 
     private async Task<string> ConvertVideo(string inputPath, string hash)
     {
+        // Metrics
+        var sizeBucket = GetMetricsSizeBucket(new FileInfo(inputPath).Length);
+        using var timer = MOTION_VIDEO_HISTOGRAM.WithLabels(sizeBucket).NewTimer();
+
         var destinationPath = inputPath + "_ffmpeg.mp4";
 
         logger.LogDebug("Running ffmpeg conversion for {Hash}", hash);
@@ -59,6 +86,10 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
 
     private async Task<string> ConvertFrames(string inputPath, string hash)
     {
+        // Metrics
+        var sizeBucket = GetMetricsSizeBucket(new FileInfo(inputPath).Length);
+        using var timer = MOTION_IMAGE_HISTOGRAM.WithLabels(sizeBucket).NewTimer();
+
         // Create frames directory next to input file
         var framesDirectory = inputPath + "_frames";
         Directory.CreateDirectory(framesDirectory);
@@ -151,5 +182,16 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
         {
             throw new Exception($"toktx exited with code {process.ExitCode}: {error}");
         }
+    }
+
+    private static string GetMetricsSizeBucket(long bytes)
+    {
+        return bytes switch
+        {
+            < 1_000_000 => "<1MB",
+            < 5_000_000 => "1-5MB",
+            < 10_000_000 => "5-10MB",
+            _ => ">10MB"
+        };
     }
 }
