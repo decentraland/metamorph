@@ -9,5 +9,5 @@ builder.SetupRemoteCache(true);
 
 var app = builder.Build();
 app.SetupMetrics();
-app.SetupMetrics();
+app.SetupHealthCheck();
 app.Run();
