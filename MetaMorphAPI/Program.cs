@@ -7,7 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.SetupSerilog();
 
 // Add controllers and a health check
-builder.Services.AddHealthChecks();
+builder.SetupHealthChecks();
 builder.Services.AddControllers();
 
 // Configure a local worker if required

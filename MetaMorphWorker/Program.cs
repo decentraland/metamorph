@@ -6,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.SetupSerilog();
 builder.SetupConverter();
 builder.SetupRemoteCache(true);
+builder.SetupHealthChecks();
 
 var app = builder.Build();
 app.SetupMetrics();

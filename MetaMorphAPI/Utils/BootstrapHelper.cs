@@ -32,6 +32,11 @@ public static class BootstrapHelper
         builder.Services.AddSerilog((_, lc) => lc.ReadFrom.Configuration(builder.Configuration));
     }
 
+    public static void SetupHealthChecks(this IHostApplicationBuilder builder)
+    {
+        builder.Services.AddHealthChecks();
+    }
+
     public static void SetupConverter(this IHostApplicationBuilder builder)
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), TEMP_DIRECTORY_NAME);
