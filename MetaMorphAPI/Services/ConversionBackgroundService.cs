@@ -11,17 +11,18 @@ public class ConversionBackgroundService(
     ConverterService converterService,
     DownloadService downloadService,
     ICacheService cacheService,
+    int concurrentConversions,
     ILogger<ConversionBackgroundService> logger)
     : BackgroundService
 {
-    private const int CONCURRENT_CONVERSIONS = 5;
-
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         // Create a list to hold the consumer tasks.
         var consumers = new List<Task>();
 
-        for (var i = 0; i < CONCURRENT_CONVERSIONS; i++)
+        logger.LogInformation("Starting {Count} conversion consumers", concurrentConversions);
+
+        for (var i = 0; i < concurrentConversions; i++)
         {
             consumers.Add(ProcessQueue(ct));
         }
@@ -32,6 +33,7 @@ public class ConversionBackgroundService(
 
     private async Task ProcessQueue(CancellationToken ct)
     {
+        // Store hash of downloaded file in Redis
         while (!ct.IsCancellationRequested)
         {
             try

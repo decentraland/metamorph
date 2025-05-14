@@ -44,6 +44,7 @@ public static class BootstrapHelper
         {
             Directory.Delete(tempDirectory, true);
         }
+
         Directory.CreateDirectory(tempDirectory);
 
         builder.Services.AddHttpClient();
@@ -61,7 +62,15 @@ public static class BootstrapHelper
                 builder.GetRequiredConfig<int>("MetaMorph:MaxDownloadFileSize")
             ));
 
-        builder.Services.AddHostedService<ConversionBackgroundService>();
+        builder.Services.AddHostedService<ConversionBackgroundService>(sp =>
+            new ConversionBackgroundService(
+                sp.GetRequiredService<IConversionQueue>(),
+                sp.GetRequiredService<ConverterService>(),
+                sp.GetRequiredService<DownloadService>(),
+                sp.GetRequiredService<ICacheService>(),
+                builder.GetRequiredConfig<int>("MetaMorph:ConcurrentConversions"),
+                sp.GetRequiredService<ILogger<ConversionBackgroundService>>()
+            ));
     }
 
     internal static void SetupLocalCache(this WebApplicationBuilder builder)
