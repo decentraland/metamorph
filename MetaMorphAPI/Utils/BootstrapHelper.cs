@@ -160,6 +160,26 @@ public static class BootstrapHelper
 
     public static void SetupMetrics(this WebApplication app)
     {
+        var metricsToken = Environment.GetEnvironmentVariable("WKC_METRICS_BEARER_TOKEN");
+
+        if (metricsToken != null)
+        {
+            app.Use(async (context, next) =>
+            {
+                if (context.Request.Path.StartsWithSegments("/metrics"))
+                {
+                    if (!context.Request.Headers.TryGetValue("Authorization", out var authHeader) ||
+                        !authHeader.ToString().Equals($"Bearer {metricsToken}"))
+                    {
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        return;
+                    }
+                }
+
+                await next(context);
+            });
+        }
+
         app.MapMetrics();
         app.UseHttpMetrics();
     }
