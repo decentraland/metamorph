@@ -27,49 +27,49 @@ public class FileTypeTests
     public async Task TestGif()
     {
         var outputPath = await _converterService.Convert(GetImagePath("test.gif"), "testhash");
-        Assert.That(File.Exists(outputPath), Is.True);
+        Assert.That(File.Exists(outputPath.path), Is.True);
     }
 
     [Test]
     public async Task TestJpeg()
     {
         var outputPath = await _converterService.Convert(GetImagePath("test.jpeg"), "testhash");
-        Assert.That(File.Exists(outputPath), Is.True);
+        Assert.That(File.Exists(outputPath.path), Is.True);
     }
 
     [Test]
     public async Task TestJpg()
     {
         var outputPath = await _converterService.Convert(GetImagePath("test.jpg"), "testhash");
-        Assert.That(File.Exists(outputPath), Is.True);
+        Assert.That(File.Exists(outputPath.path), Is.True);
     }
 
     [Test]
     public async Task TestPng()
     {
         var outputPath = await _converterService.Convert(GetImagePath("test.png"), "testhash");
-        Assert.That(File.Exists(outputPath), Is.True);
+        Assert.That(File.Exists(outputPath.path), Is.True);
     }
 
     [Test]
     public async Task TestSvg()
     {
         var outputPath = await _converterService.Convert(GetImagePath("test.svg"), "testhash");
-        Assert.That(File.Exists(outputPath), Is.True);
+        Assert.That(File.Exists(outputPath.path), Is.True);
     }
 
     [Test]
     public async Task TestWebP()
     {
         var outputPath = await _converterService.Convert(GetImagePath("test.webp"), "testhash");
-        Assert.That(File.Exists(outputPath), Is.True);
+        Assert.That(File.Exists(outputPath.path), Is.True);
     }
 
     [Test]
     public async Task TestWebPAnimated()
     {
         var outputPath = await _converterService.Convert(GetImagePath("test_animated.webp"), "testhash");
-        Assert.That(File.Exists(outputPath), Is.True);
+        Assert.That(File.Exists(outputPath.path), Is.True);
     }
 
     private static string GetImagePath(string fileName) =>

@@ -49,7 +49,7 @@ public class MeasurementTests
 
         await TestContext.Out.WriteLineAsync($"{stopwatch.ElapsedMilliseconds}ms");
 
-        Assert.That(File.Exists(outputPath), Is.True);
+        Assert.That(File.Exists(outputPath.path), Is.True);
     }
 
     private static IEnumerable<string> All5KImages() => AllImages("5k");
