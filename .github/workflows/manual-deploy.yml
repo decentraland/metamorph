@@ -16,21 +16,29 @@ on:
         default: "latest"
         type: string
         description: "Docker tag (quay.io)"
+      service_name:
+        required: true
+        type: choice
+        options:
+          - both
+          - metamorph-api
+          - metamorph-worker
+        default: both
+        description: "Service to deploy"
 
 jobs:
   deployment:
     strategy:
       matrix:
-        include:
-        - service_name: metamorph-api
-        - service_name: metamorph-worker
+        service_name: [metamorph-api, metamorph-worker]
     if: ${{ inputs.deployment-environment }}
-    name: "Deploy to: ${{ inputs.deployment-environment }}"
+    name: Deploy ${{ matrix.service_name }} to ${{ inputs.deployment-environment }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.deployment-environment }}
     steps:
       - name: Trigger deployment
         id: deploy
+        if: ${{ inputs.service_name == 'both' || inputs.service_name == matrix.service_name }}
         uses: decentraland/dcl-deploy-action@main
         with:
           dockerImage: "quay.io/decentraland/${{ matrix.service_name }}:${{ inputs.tag }}"
