@@ -12,19 +12,19 @@ namespace MetaMorphAPI.Services;
 public class ConverterService(string tempDirectory, FileAnalyzerService fileAnalyzer, ILogger<ConverterService> logger)
 {
     private static readonly Histogram STATIC_IMAGE_HISTOGRAM = Metrics.CreateHistogram(
-        "media_conversion_static_image_duration_seconds",
+        "dcl_metamorph_static_image_duration_seconds",
         "Duration of static image conversions in seconds.",
         new HistogramConfiguration { LabelNames = ["size_bucket"] }
     );
 
     private static readonly Histogram MOTION_IMAGE_HISTOGRAM = Metrics.CreateHistogram(
-        "media_conversion_motion_image_duration_seconds",
+        "dcl_metamorph_motion_image_duration_seconds",
         "Duration of motion image conversions in seconds.",
         new HistogramConfiguration { LabelNames = ["size_bucket"] }
     );
 
     private static readonly Histogram MOTION_VIDEO_HISTOGRAM = Metrics.CreateHistogram(
-        "media_conversion_motion_video_duration_seconds",
+        "dcl_metamorph_motion_video_duration_seconds",
         "Duration of motion video conversions in seconds.",
         new HistogramConfiguration { LabelNames = ["size_bucket"] }
     );
