@@ -12,7 +12,7 @@ public class DownloadService(string tempDirectory, HttpClient httpClient, long m
     /// <summary>
     /// Downloads a file from URL and saves it to <see cref="tempDirectory"/> with <see cref="hash"/> filename.
     /// </summary>
-    public async Task<string> DownloadFile(string url, string hash)
+    public async Task<(string path, string? eTag, TimeSpan? maxAge)> DownloadFile(string url, string hash)
     {
         using var response =
             await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
@@ -62,6 +62,6 @@ public class DownloadService(string tempDirectory, HttpClient httpClient, long m
             ArrayPool<byte>.Shared.Return(buffer);
         }
 
-        return tempFilePath;
+        return (tempFilePath, response.Headers.ETag?.Tag, response.Headers.CacheControl?.MaxAge);
     }
 }

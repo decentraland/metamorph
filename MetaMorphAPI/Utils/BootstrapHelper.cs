@@ -122,6 +122,7 @@ public static class BootstrapHelper
                 setupS3 ? sp.GetRequiredService<IAmazonS3>() : null,
                 setupS3 ? builder.GetRequiredConfig<string>("AWS:S3BucketName") : null,
                 sp.GetRequiredService<ConnectionMultiplexer>(),
+                sp.GetRequiredService<HttpClient>(),
                 sp.GetRequiredService<ILogger<RemoteCacheService>>()
             ));
     }

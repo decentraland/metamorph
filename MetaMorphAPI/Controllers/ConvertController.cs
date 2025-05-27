@@ -30,7 +30,9 @@ public class ConvertController(
 
         logger.LogInformation("Conversion requested for {URL} - {Hash}.", url, hash);
 
-        var cachedURL = await cacheService.TryFetchURL(hash);
+        var cacheResult = await cacheService.TryFetchURL(hash);
+        var cachedURL = cacheResult?.url;
+        var expired = cacheResult?.expired ?? false;
 
         if (cachedURL != null)
         {
@@ -42,7 +44,7 @@ public class ConvertController(
                 cachedURL = builder.Uri.ToString();
             }
             
-            logger.LogInformation("Conversion exists for {Hash} at {URL}", hash, cachedURL);
+            logger.LogInformation("Conversion exists for {Hash} (expired: {Expired}) at {URL}", hash, expired, cachedURL);
             return Redirect(cachedURL);
         }
 

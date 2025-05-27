@@ -44,16 +44,16 @@ public class ConversionBackgroundService(
                 logger.LogInformation("Processing conversion {Hash} from {URL}", conversionJob.Hash, conversionJob.URL);
 
                 // Download and convert
-                var downloadPath = await downloadService.DownloadFile(conversionJob.URL, conversionJob.Hash);
-                var (convertedPath, duration) = await converterService.Convert(downloadPath, conversionJob.Hash);
+                var downloadResult = await downloadService.DownloadFile(conversionJob.URL, conversionJob.Hash);
+                var (convertedPath, duration) = await converterService.Convert(downloadResult.path, conversionJob.Hash);
 
-                File.Delete(downloadPath); // Cleanup
+                File.Delete(downloadResult.path); // Cleanup
 
                 logger.LogInformation("Conversion completed successfully in {Duration:F1}s for {Hash}",
                     duration.TotalSeconds, conversionJob.Hash);
 
                 // Push to cache
-                await cacheService.Store(conversionJob.Hash, convertedPath);
+                await cacheService.Store(conversionJob.Hash, downloadResult.eTag, downloadResult.maxAge, convertedPath);
 
                 File.Delete(convertedPath); // Cleanup
 

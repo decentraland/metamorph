@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Amazon.SQS;
 using Amazon.SQS.Model;
+using MetaMorphAPI.Services.Cache;
 using StackExchange.Redis;
 
 namespace MetaMorphAPI.Services.Queue;
@@ -22,8 +23,7 @@ public class RemoteConversionQueue(
 
     public async Task Enqueue(ConversionJob job, CancellationToken ct = default)
     {
-        var redisKey = $"converting:{job.Hash}";
-        if (!await _redisDb.StringSetAsync(redisKey, "1", _conversionExpiry, When.NotExists))
+        if (!await _redisDb.StringSetAsync(RedisKeys.GetConvertingKey(job.Hash), "1", _conversionExpiry, When.NotExists))
         {
             // Already queued
             logger.LogInformation("Conversion already enqueued, skipping: {Hash}", job.Hash);

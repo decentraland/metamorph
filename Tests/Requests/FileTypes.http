@@ -13,5 +13,8 @@ GET {{HOST}}/convert?
 
 ### WEBP (Animated)
 GET {{HOST}}/convert?
-    url=https://i.seadn.io/gae/Jfty-cj_9VSeSn_l8OYxyuEefVL-slOoa-jYpv2FlnK-S8mD2V0bZlTIMOQT5KEJhIxqxzPQbTqfpRogGU7hqqDT7NR9-If0iMhoAQ?w=500&
-    auto=format
+    url=https://i.seadn.io/gae/Jfty-cj_9VSeSn_l8OYxyuEefVL-slOoa-jYpv2FlnK-S8mD2V0bZlTIMOQT5KEJhIxqxzPQbTqfpRogGU7hqqDT7NR9-If0iMhoAQ?w=500&auto=format
+
+### Map Image
+GET {{HOST}}/convert?url=https://media.githubusercontent.com/media/genesis-city/parcels/new-client-images/maps/lod-0/3/0%2C7.jpg
+

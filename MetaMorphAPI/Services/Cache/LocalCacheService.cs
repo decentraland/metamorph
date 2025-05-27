@@ -5,7 +5,7 @@ namespace MetaMorphAPI.Services.Cache;
 /// </summary>
 public class LocalCacheService(string storagePath, ILogger<LocalCacheService> logger) : ICacheService
 {
-    public Task Store(string hash, string sourcePath)
+    public Task Store(string hash, string? eTag, TimeSpan? maxAge, string sourcePath)
     {
         var extension = Path.GetExtension(sourcePath);
         var destinationPath = Path.Combine(storagePath, $"{hash}{extension}");
@@ -20,17 +20,17 @@ public class LocalCacheService(string storagePath, ILogger<LocalCacheService> lo
         return Task.CompletedTask;
     }
 
-    public Task<string?> TryFetchURL(string hash)
+    public Task<(string url, bool expired)?> TryFetchURL(string hash)
     {
         foreach (var ext in new[] { "ktx2", "mp4" })
         {
             var filePath = Path.Combine(storagePath, $"{hash}.{ext}");
             if (File.Exists(filePath))
             {
-                return Task.FromResult<string?>($"/converted/{hash}.{ext}");
+                return Task.FromResult<(string, bool)?>(($"/converted/{hash}.{ext}", false));
             }
         }
 
-        return Task.FromResult<string?>(null);
+        return Task.FromResult<(string, bool)?>(null);
     }
 }

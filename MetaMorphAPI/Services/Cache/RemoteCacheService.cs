@@ -1,8 +1,8 @@
-using System;
+using System.Net;
 using Amazon.S3;
 using Amazon.S3.Transfer;
-using MetaMorphAPI.Utils;
 using StackExchange.Redis;
+using RedisKVP = System.Collections.Generic.KeyValuePair<StackExchange.Redis.RedisKey, StackExchange.Redis.RedisValue>;
 
 namespace MetaMorphAPI.Services.Cache
 {
@@ -13,6 +13,7 @@ namespace MetaMorphAPI.Services.Cache
         IAmazonS3? s3Client,
         string? bucketName,
         ConnectionMultiplexer redis,
+        HttpClient httpClient,
         ILogger<RemoteCacheService> logger)
         : ICacheService
     {
@@ -22,7 +23,7 @@ namespace MetaMorphAPI.Services.Cache
         /// <summary>
         /// Uploads the converted file to S3 and stores the S3 URL in Redis under the provided hash.
         /// </summary>
-        public async Task Store(string hash, string sourcePath)
+        public async Task Store(string hash, string? eTag, TimeSpan? maxAge, string sourcePath)
         {
             if (bucketName == null || s3Client == null)
             {
@@ -66,17 +67,76 @@ namespace MetaMorphAPI.Services.Cache
             var s3Url = $"{endpoint.URL}{s3Key}";
 
             // Store the hash to S3 URL mapping in Redis
-            logger.LogInformation("Sending to redis: {Key}:{S3Url}", hash, s3Url);
-            await _redisDb.StringSetAsync(hash, s3Url);
+            logger.LogInformation("Sending to redis: {Key}:{S3Url}, etag:{ETag}, maxAge:{MaxAge}", hash, s3Url, eTag,
+                maxAge?.ToString());
+
+            var keys = new List<RedisKVP>(3) { new(hash, s3Url) };
+
+            if (eTag != null)
+            {
+                keys.Add(new RedisKVP(RedisKeys.GetETagKey(hash), eTag));
+            }
+
+            if (maxAge == null)
+            {
+                // If there's no max age we don't need to add a TTL to the key so we can send it in the initial batch
+                keys.Add(new RedisKVP(RedisKeys.GetValidKey(hash), "1"));
+            }
+
+            await _redisDb.StringSetAsync(keys.ToArray());
+
+            if (maxAge != null)
+            {
+                // Store the max age in Redis as the TTL of the valid:{hash} key
+                // Needs to be sent separately so we can set the TTL
+                await _redisDb.StringSetAsync(RedisKeys.GetValidKey(hash), "1", maxAge.Value, When.Always);
+            }
         }
 
         /// <summary>
         /// Retrieves the S3 URL for the converted file from Redis using the hash.
         /// </summary>
-        public async Task<string?> TryFetchURL(string hash)
+        public async Task<(string url, bool expired)?> TryFetchURL(string hash)
         {
-            var redisValue = await _redisDb.StringGetAsync(hash);
-            return redisValue.IsNullOrEmpty ? null : redisValue.ToString();
+            var results = await _redisDb.StringGetAsync(
+                [
+                    RedisKeys.GetURLKey(hash),
+                    RedisKeys.GetETagKey(hash),
+                    RedisKeys.GetValidKey(hash),
+                    RedisKeys.GetConvertingKey(hash)
+                ]
+            );
+
+            var url = results[0].IsNullOrEmpty ? null : results[0].ToString();
+            var eTag = results[1].IsNullOrEmpty ? null : results[1].ToString();
+            var expired = results[2].IsNullOrEmpty;
+            var converting = !results[3].IsNullOrEmpty;
+
+            if (expired && !converting)
+            {
+                if (eTag != null)
+                {
+                    var request = new HttpRequestMessage(HttpMethod.Head, url);
+                    request.Headers.IfNoneMatch.ParseAdd(eTag);
+
+                    using var response = await httpClient.SendAsync(request)
+                        .ConfigureAwait(false);
+
+                    if (response.StatusCode == HttpStatusCode.NotModified)
+                    {
+                        expired = false;
+                        var maxAge = response.Headers.CacheControl?.MaxAge;
+                        await _redisDb.StringSetAsync(RedisKeys.GetValidKey(hash), "1", maxAge, When.Always);
+                    }
+                }
+            }
+
+            if (url != null)
+            {
+                return (url, expired);
+            }
+
+            return null;
         }
     }
 }
