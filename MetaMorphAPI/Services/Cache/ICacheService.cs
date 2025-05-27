@@ -13,5 +13,5 @@ public interface ICacheService
     /// <summary>
     /// Gets the URL of the cached file. If the file isn't cached it returns null.
     /// </summary>
-    Task<(string url, bool expired)?> TryFetchURL(string hash);
+    Task<(string url, bool expired)?> TryFetchURL(string hash, string url);
 }

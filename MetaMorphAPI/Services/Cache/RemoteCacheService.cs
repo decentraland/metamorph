@@ -96,7 +96,7 @@ public class RemoteCacheService(
     /// <summary>
     /// Retrieves the S3 URL for the converted file from Redis using the hash.
     /// </summary>
-    public async Task<(string url, bool expired)?> TryFetchURL(string hash)
+    public async Task<(string url, bool expired)?> TryFetchURL(string hash, string url)
     {
         var results = await _redisDb.StringGetAsync(
             [
@@ -107,13 +107,14 @@ public class RemoteCacheService(
             ]
         );
 
-        var url = results[0].IsNullOrEmpty ? null : results[0].ToString();
+        var cachedUrl = results[0].IsNullOrEmpty ? null : results[0].ToString();
         var eTag = results[1].IsNullOrEmpty ? null : results[1].ToString();
         var expired = results[2].IsNullOrEmpty;
         var converting = !results[3].IsNullOrEmpty;
 
         if (expired && !converting)
         {
+            logger.LogInformation("Cache is expired for {Hash} with ETag:{ETag}", hash, eTag);
             if (eTag != null)
             {
                 var request = new HttpRequestMessage(HttpMethod.Head, url);
@@ -126,14 +127,17 @@ public class RemoteCacheService(
                 {
                     expired = false;
                     var maxAge = response.Headers.CacheControl?.MaxAge;
+
+                    logger.LogInformation("Source not modified for {Hash}, resetting TTL to {MaxAge}", hash,
+                        maxAge?.ToString());
                     await _redisDb.StringSetAsync(RedisKeys.GetValidKey(hash), "1", maxAge, When.Always);
                 }
             }
         }
 
-        if (url != null)
+        if (cachedUrl != null)
         {
-            return (url, expired);
+            return (cachedUrl, expired);
         }
 
         return null;

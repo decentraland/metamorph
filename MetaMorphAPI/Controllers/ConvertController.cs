@@ -18,7 +18,7 @@ public class ConvertController(
     ILogger<ConvertController> logger) : ControllerBase
 {
     private readonly string? _s3HostOverride = configuration["AWS:S3PublicHost"];
-    
+
     [HttpGet("/convert")]
     [HttpHead("/convert")]
     public async Task<IActionResult> Convert([FromQuery] string url)
@@ -30,7 +30,7 @@ public class ConvertController(
 
         logger.LogInformation("Conversion requested for {URL} - {Hash}.", url, hash);
 
-        var cacheResult = await cacheService.TryFetchURL(hash);
+        var cacheResult = await cacheService.TryFetchURL(hash, url);
         var cachedURL = cacheResult?.url;
         var expired = cacheResult?.expired ?? false;
 
@@ -43,17 +43,19 @@ public class ConvertController(
                 var builder = new UriBuilder(uri) { Host = _s3HostOverride };
                 cachedURL = builder.Uri.ToString();
             }
-            
-            logger.LogInformation("Conversion exists for {Hash} (expired: {Expired}) at {URL}", hash, expired, cachedURL);
-            return Redirect(cachedURL);
+
+            logger.LogInformation("Conversion exists for {Hash} (expired: {Expired}) at {URL}", hash, expired,
+                cachedURL);
         }
 
-        logger.LogInformation("Queuing conversion for {Hash}", hash);
-        await conversionQueue.Enqueue(new ConversionJob(hash, url));
+        if (cacheResult == null || cacheResult.Value.expired)
+        {
+            logger.LogInformation("Queuing conversion for {Hash}", hash);
+            await conversionQueue.Enqueue(new ConversionJob(hash, url));
+        }
 
-        // TODO: Check if we can add headers to redirects
-        
-        return Redirect(url);
+        // Redirect to cached URL if it exists or to the original
+        return Redirect(cachedURL ?? url);
     }
 
     private static string ComputeSha256(string input)

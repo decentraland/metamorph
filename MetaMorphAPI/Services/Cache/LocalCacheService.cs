@@ -20,7 +20,7 @@ public class LocalCacheService(string storagePath, ILogger<LocalCacheService> lo
         return Task.CompletedTask;
     }
 
-    public Task<(string url, bool expired)?> TryFetchURL(string hash)
+    public Task<(string url, bool expired)?> TryFetchURL(string hash, string url)
     {
         foreach (var ext in new[] { "ktx2", "mp4" })
         {
