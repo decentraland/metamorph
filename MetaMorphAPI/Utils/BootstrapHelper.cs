@@ -47,7 +47,6 @@ public static class BootstrapHelper
 
         Directory.CreateDirectory(tempDirectory);
 
-        builder.Services.AddHttpClient();
         builder.Services.AddSingleton<FileAnalyzerService>();
         builder.Services.AddSingleton<ConverterService>(sp =>
             new ConverterService(
