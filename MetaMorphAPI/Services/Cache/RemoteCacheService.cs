@@ -14,9 +14,11 @@ public class RemoteCacheService(
     string? bucketName,
     ConnectionMultiplexer redis,
     HttpClient httpClient,
-    ILogger<RemoteCacheService> logger)
+    ILogger<RemoteCacheService> logger,
+    int minMaxAgeMinutes)
     : ICacheService
 {
+    private readonly TimeSpan _minMaxAge = TimeSpan.FromMinutes(minMaxAgeMinutes);
     private readonly IDatabase _redisDb = redis.GetDatabase();
     private readonly TransferUtility _transferUtility = new(s3Client);
 
@@ -65,6 +67,9 @@ public class RemoteCacheService(
             Key = s3Key
         });
         var s3Url = $"{endpoint.URL}{s3Key}";
+        
+        // Sanitize max age
+        maxAge = SanitizeMaxAge(maxAge);
 
         // Store the hash to S3 URL mapping in Redis
         logger.LogInformation("Sending to redis: {Key}:{S3Url}, etag:{ETag}, maxAge:{MaxAge}", hash, s3Url, eTag,
@@ -126,7 +131,7 @@ public class RemoteCacheService(
                 if (response.StatusCode == HttpStatusCode.NotModified)
                 {
                     expired = false;
-                    var maxAge = response.Headers.CacheControl?.MaxAge;
+                    var maxAge = SanitizeMaxAge(response.Headers.CacheControl?.MaxAge);
 
                     logger.LogInformation("Source not modified for {Hash}, resetting TTL to {MaxAge}", hash,
                         maxAge?.ToString());
@@ -141,5 +146,19 @@ public class RemoteCacheService(
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// If the max age is less than 5 minutes, we set it to 5 minutes. If there is no max age,
+    /// we keep it and that url will be cached indefinitely.
+    /// </summary>
+    private TimeSpan? SanitizeMaxAge(TimeSpan? maxAge)
+    {
+        if (maxAge != null && maxAge < TimeSpan.FromMinutes(5))
+        {
+            return _minMaxAge;
+        }
+
+        return maxAge;
     }
 }

@@ -122,7 +122,8 @@ public static class BootstrapHelper
                 setupS3 ? builder.GetRequiredConfig<string>("AWS:S3BucketName") : null,
                 sp.GetRequiredService<ConnectionMultiplexer>(),
                 sp.GetRequiredService<HttpClient>(),
-                sp.GetRequiredService<ILogger<RemoteCacheService>>()
+                sp.GetRequiredService<ILogger<RemoteCacheService>>(),
+                builder.GetRequiredConfig<int>("MetaMorph:MinMaxAgeMinutes")
             ));
     }
 
