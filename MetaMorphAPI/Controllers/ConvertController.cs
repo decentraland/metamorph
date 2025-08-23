@@ -66,7 +66,11 @@ public class ConvertController(
             if (!string.IsNullOrWhiteSpace(_s3HostOverride))
             {
                 var uri = new Uri(cachedURL);
-                var builder = new UriBuilder(uri) { Host = _s3HostOverride };
+                var builder = new UriBuilder(uri) {
+                    Host = _s3HostOverride,
+                    Scheme = "https",
+                    Port = -1 // -1 removes the port from the URL
+                };
                 cachedURL = builder.Uri.ToString();
             }
 
