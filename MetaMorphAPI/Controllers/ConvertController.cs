@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using MetaMorphAPI.Services;
 using MetaMorphAPI.Services.Cache;
 using MetaMorphAPI.Services.Queue;
 using Microsoft.AspNetCore.Mvc;
@@ -14,6 +15,7 @@ namespace MetaMorphAPI.Controllers;
 public class ConvertController(
     ICacheService cacheService,
     IConversionQueue conversionQueue,
+    IConversionStatusService conversionStatusService,
     IConfiguration configuration,
     ILogger<ConvertController> logger) : ControllerBase
 {
@@ -21,7 +23,7 @@ public class ConvertController(
 
     [HttpGet("/convert")]
     [HttpHead("/convert")]
-    public async Task<IActionResult> Convert([FromQuery] string url, [FromQuery] string? format = null)
+    public async Task<IActionResult> Convert([FromQuery] string url, [FromQuery] string? format = null, [FromQuery] bool wait = false)
     {
         if (string.IsNullOrWhiteSpace(url))
             return BadRequest("Query parameter url is required.");
@@ -60,6 +62,33 @@ public class ConvertController(
         {
             logger.LogInformation("Queuing conversion for {Hash} with format {Format}", hash, format);
             await conversionQueue.Enqueue(new ConversionJob(hash, url, format));
+            
+            // If wait is requested, wait for conversion
+            if (wait)
+            {
+                logger.LogInformation("Waiting for conversion {Hash} to complete", hash);
+                var timeout = TimeSpan.FromSeconds(20);
+                var resultUrl = await conversionStatusService.WaitForConversionAsync(hash, timeout);
+                
+                if (!string.IsNullOrEmpty(resultUrl))
+                {
+                    // Override S3 host for external redirects, if specified
+                    if (!string.IsNullOrWhiteSpace(_s3HostOverride))
+                    {
+                        var uri = new Uri(resultUrl);
+                        var builder = new UriBuilder(uri) { Host = _s3HostOverride };
+                        resultUrl = builder.Uri.ToString();
+                    }
+                    
+                    logger.LogInformation("Conversion completed for {Hash}, redirecting to {URL}", hash, resultUrl);
+                    return Redirect(resultUrl);
+                }
+                else
+                {
+                    logger.LogWarning("Conversion timed out or failed for {Hash}, redirecting to original", hash);
+                    return Redirect(url);
+                }
+            }
         }
 
         // Redirect to cached URL if it exists or to the original

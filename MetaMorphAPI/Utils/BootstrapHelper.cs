@@ -48,6 +48,7 @@ public static class BootstrapHelper
         Directory.CreateDirectory(tempDirectory);
 
         builder.Services.AddSingleton<FileAnalyzerService>();
+        
         builder.Services.AddSingleton<ConverterService>(sp =>
             new ConverterService(
                 tempDirectory,
@@ -67,6 +68,7 @@ public static class BootstrapHelper
                 sp.GetRequiredService<ConverterService>(),
                 sp.GetRequiredService<DownloadService>(),
                 sp.GetRequiredService<ICacheService>(),
+                sp.GetService<IConversionStatusService>(), // Optional - may be null
                 builder.GetRequiredConfig<int>("MetaMorph:ConcurrentConversions"),
                 sp.GetRequiredService<ILogger<ConversionBackgroundService>>()
             ));

@@ -11,6 +11,7 @@ public class ConversionBackgroundService(
     ConverterService converterService,
     DownloadService downloadService,
     ICacheService cacheService,
+    IConversionStatusService? conversionStatusService,
     int concurrentConversions,
     ILogger<ConversionBackgroundService> logger)
     : BackgroundService
@@ -36,10 +37,11 @@ public class ConversionBackgroundService(
         // Store hash of downloaded file in Redis
         while (!ct.IsCancellationRequested)
         {
+            ConversionJob? conversionJob = null;
             try
             {
                 // Await the next job from the queue.
-                var conversionJob = await queue.Dequeue(ct);
+                conversionJob = await queue.Dequeue(ct);
 
                 logger.LogInformation("Processing conversion {Hash} from {URL} to {Format}", conversionJob.Hash, conversionJob.URL, conversionJob.Format);
 
@@ -59,10 +61,24 @@ public class ConversionBackgroundService(
                 File.Delete(convertedPath); // Cleanup
 
                 logger.LogInformation("Conversion cached successfully for {Hash}", conversionJob.Hash);
+                
+                // Get the cached URL
+                var cacheResult = await cacheService.TryFetchURL(conversionJob.Hash, conversionJob.URL);
+                if (cacheResult.HasValue && conversionStatusService != null)
+                {
+                    // Notify waiting requests
+                    conversionStatusService.NotifyConversionComplete(conversionJob.Hash, cacheResult.Value.url);
+                }
             }
             catch (Exception e) when (!ct.IsCancellationRequested)
             {
                 logger.LogError(e, "Error running conversion");
+                
+                // Notify failure if we have the job
+                if (conversionJob != null && conversionStatusService != null)
+                {
+                    conversionStatusService.NotifyConversionFailed(conversionJob.Hash);
+                }
             }
         }
     }
