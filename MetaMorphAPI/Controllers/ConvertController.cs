@@ -21,14 +21,22 @@ public class ConvertController(
 
     [HttpGet("/convert")]
     [HttpHead("/convert")]
-    public async Task<IActionResult> Convert([FromQuery] string url)
+    public async Task<IActionResult> Convert([FromQuery] string url, [FromQuery] string? format = null)
     {
         if (string.IsNullOrWhiteSpace(url))
             return BadRequest("Query parameter url is required.");
 
-        var hash = ComputeSha256(url);
+        // Validate format parameter
+        var validFormats = new[] { "mp4", "ogv", "astc", "astc_high" };
+        if (!string.IsNullOrWhiteSpace(format) && !validFormats.Contains(format))
+            return BadRequest($"Format parameter must be one of: {string.Join(", ", validFormats)}");
 
-        logger.LogInformation("Conversion requested for {URL} - {Hash}.", url, hash);
+        // Default to mp4 if no format specified
+        format ??= "mp4";
+
+        var hash = ComputeSha256WithFormat(url, format);
+
+        logger.LogInformation("Conversion requested for {URL} - {Hash} (format: {Format}).", url, hash, format);
 
         var cacheResult = await cacheService.TryFetchURL(hash, url);
         var cachedURL = cacheResult?.url;
@@ -50,8 +58,8 @@ public class ConvertController(
 
         if (cacheResult == null || cacheResult.Value.expired)
         {
-            logger.LogInformation("Queuing conversion for {Hash}", hash);
-            await conversionQueue.Enqueue(new ConversionJob(hash, url));
+            logger.LogInformation("Queuing conversion for {Hash} with format {Format}", hash, format);
+            await conversionQueue.Enqueue(new ConversionJob(hash, url, format));
         }
 
         // Redirect to cached URL if it exists or to the original
@@ -60,6 +68,14 @@ public class ConvertController(
 
     private static string ComputeSha256(string input)
     {
+        var bytes = Encoding.UTF8.GetBytes(input);
+        var hash = SHA256.HashData(bytes);
+        return System.Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static string ComputeSha256WithFormat(string url, string format)
+    {
+        var input = $"{url}_{format}";
         var bytes = Encoding.UTF8.GetBytes(input);
         var hash = SHA256.HashData(bytes);
         return System.Convert.ToHexString(hash).ToLowerInvariant();
