@@ -37,6 +37,7 @@ public class RemoteCacheService(
         {
             ".ktx2" => "image/ktx2",
             ".mp4" => "video/mp4",
+            ".ogv" => "video/ogg",
             _ => throw new InvalidOperationException($"Unrecognized file extension {extension}")
         };
         var s3Key = $"{DateTime.Now:yyyyMMdd-HHmmss}-{hash}{extension}";

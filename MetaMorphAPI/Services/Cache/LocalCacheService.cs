@@ -22,7 +22,7 @@ public class LocalCacheService(string storagePath, ILogger<LocalCacheService> lo
 
     public Task<(string url, bool expired)?> TryFetchURL(string hash, string url)
     {
-        foreach (var ext in new[] { "ktx2", "mp4" })
+        foreach (var ext in new[] { "ktx2", "mp4", "ogv" })
         {
             var filePath = Path.Combine(storagePath, $"{hash}.{ext}");
             if (File.Exists(filePath))

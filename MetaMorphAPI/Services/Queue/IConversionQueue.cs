@@ -22,4 +22,5 @@ public interface IConversionQueue
 /// </summary>
 /// <param name="Hash">The hash of the URL</param>
 /// <param name="URL">The source URL</param>
-public record ConversionJob(string Hash, string URL);
+/// <param name="Format">The target format (mp4 or ogv)</param>
+public record ConversionJob(string Hash, string URL, string Format = "mp4");

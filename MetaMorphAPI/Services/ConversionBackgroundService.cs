@@ -41,16 +41,17 @@ public class ConversionBackgroundService(
                 // Await the next job from the queue.
                 var conversionJob = await queue.Dequeue(ct);
 
-                logger.LogInformation("Processing conversion {Hash} from {URL}", conversionJob.Hash, conversionJob.URL);
+                logger.LogInformation("Processing conversion {Hash} from {URL} to {Format}", conversionJob.Hash, conversionJob.URL, conversionJob.Format);
 
                 // Download and convert
                 var downloadResult = await downloadService.DownloadFile(conversionJob.URL, conversionJob.Hash);
-                var (convertedPath, duration) = await converterService.Convert(downloadResult.path, conversionJob.Hash);
+                var (convertedPath, duration) = await converterService.Convert(downloadResult.path, conversionJob.Hash, conversionJob.Format);
 
                 File.Delete(downloadResult.path); // Cleanup
-
-                logger.LogInformation("Conversion completed successfully in {Duration:F1}s for {Hash}",
-                    duration.TotalSeconds, conversionJob.Hash);
+                
+                var fileInfo = new FileInfo(convertedPath);
+                logger.LogInformation("Conversion completed successfully in {Duration:F1}s for {Hash}, output size: {Size} bytes",
+                    duration.TotalSeconds, conversionJob.Hash, fileInfo.Length);
 
                 // Push to cache
                 await cacheService.Store(conversionJob.Hash, downloadResult.eTag, downloadResult.maxAge, convertedPath);
