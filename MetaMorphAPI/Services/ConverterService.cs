@@ -255,15 +255,15 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
         process.StartInfo = processInfo;
         process.Start();
 
-        // Read the output asynchronously.
-        var output = await process.StandardOutput.ReadToEndAsync();
-        var error = await process.StandardError.ReadToEndAsync();
+        // Read the output asynchronously to prevent buffer overflow
+        await process.StandardOutput.ReadToEndAsync();
+        await process.StandardError.ReadToEndAsync();
 
         await process.WaitForExitAsync();
 
         if (process.ExitCode != 0)
         {
-            throw new Exception($"toktx exited with code {process.ExitCode}. Command: toktx {processInfo.Arguments}\nStdout: {output}\nStderr: {error}");
+            throw new Exception($"toktx conversion failed with exit code {process.ExitCode}");
         }
     }
 

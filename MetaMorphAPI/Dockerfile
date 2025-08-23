@@ -26,10 +26,10 @@ EXPOSE 8080
 # Install ffmpeg and required libraries for toktx and ImageMagick
 USER root
 RUN apk add --no-cache ffmpeg libstdc++ libgomp \
-    # ImageMagick dependencies for ARM64
-    imagemagick imagemagick-libs imagemagick-dev \
-    # Additional libraries that might be needed
-    musl-dev libc6-compat
+    # ImageMagick runtime dependencies
+    imagemagick imagemagick-libs \
+    # Compatibility library for glibc apps
+    libc6-compat
 
 # Copy toktx from builder stage
 COPY --from=ktx-builder /out/bin/toktx /usr/local/bin/
