@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
+using MetaMorphAPI.Enums;
 using MetaMorphAPI.Services.Cache;
 
 namespace MetaMorphAPI.Services;
@@ -6,91 +8,69 @@ namespace MetaMorphAPI.Services;
 /// <summary>
 /// Tracks conversion status and allows waiting for completion
 /// </summary>
-public interface IConversionStatusService
+public class ConversionStatusService(
+    ICacheService cacheService,
+    TimeSpan waitTimeout,
+    TimeSpan pollInterval,
+    ILogger<ConversionStatusService> logger)
 {
-    Task<string?> WaitForConversionAsync(string hash, TimeSpan timeout);
-    void NotifyConversionComplete(string hash, string url);
-    void NotifyConversionFailed(string hash);
-}
+    private readonly ConcurrentDictionary<ConversionKey, Task<string?>> _pendingConversions = new();
 
-public class ConversionStatusService : IConversionStatusService
-{
-    private readonly ConcurrentDictionary<string, TaskCompletionSource<string?>> _pendingConversions = new();
-    private readonly ILogger<ConversionStatusService> _logger;
-    private readonly ICacheService _cacheService;
-
-    public ConversionStatusService(ILogger<ConversionStatusService> logger, ICacheService cacheService)
+    public Task<string?> WaitForConversionAsync(string hash, ImageFormat imageFormat, VideoFormat videoFormat)
     {
-        _logger = logger;
-        _cacheService = cacheService;
+        var key = new ConversionKey(hash, imageFormat, videoFormat);
+        
+        // We pass all the arguments manually so we don't do a clojure allocation.
+        return _pendingConversions.GetOrAdd(key, static (key, args) => 
+                PollAndRemoveAsync(key, args.waitTimeout, args.pollInterval, args.cacheService, args.logger, args._pendingConversions),
+            (_pendingConversions, waitTimeout, pollInterval, cacheService, logger));
     }
 
-    public async Task<string?> WaitForConversionAsync(string hash, TimeSpan timeout)
+    private static async Task<string?> PollAndRemoveAsync(ConversionKey key, TimeSpan waitTimeout,
+        TimeSpan pollInterval, ICacheService cacheService, ILogger<ConversionStatusService> logger,
+        ConcurrentDictionary<ConversionKey, Task<string?>> pendingConversions)
     {
-        var tcs = _pendingConversions.GetOrAdd(hash, _ => new TaskCompletionSource<string?>());
-        
-        using var cts = new CancellationTokenSource(timeout);
-        
-        // Start polling task
-        _ = PollForConversionAsync(hash, cts.Token, tcs);
-        
-        using var registration = cts.Token.Register(() => tcs.TrySetResult(null));
-        
         try
         {
-            return await tcs.Task;
+            return await PollForConversionAsync(key, waitTimeout, pollInterval, cacheService, logger)
+                .ConfigureAwait(false);
         }
         finally
         {
-            _pendingConversions.TryRemove(hash, out _);
+            pendingConversions.TryRemove(key, out _);
         }
     }
-    
-    private async Task PollForConversionAsync(string hash, CancellationToken cancellationToken, TaskCompletionSource<string?> tcs)
+
+    private static async Task<string?> PollForConversionAsync(ConversionKey key, TimeSpan waitTimeout,
+        TimeSpan pollInterval, ICacheService cacheService, ILogger<ConversionStatusService> logger)
     {
-        const int pollIntervalMs = 500; // Poll every 500ms
-        
-        while (!cancellationToken.IsCancellationRequested && !tcs.Task.IsCompleted)
+        using var timeout = new CancellationTokenSource(waitTimeout);
+        using var timer = new PeriodicTimer(pollInterval);
+
+        while (!timeout.IsCancellationRequested)
         {
             try
             {
                 // Check cache for completion
-                var cacheResult = await _cacheService.TryFetchURL(hash, string.Empty);
-                if (cacheResult.HasValue && !cacheResult.Value.expired)
+                var cacheResult = await cacheService.TryFetchURL(key.Hash, null, key.ImageFormat, key.VideoFormat);
+                if (cacheResult.HasValue)
                 {
-                    _logger.LogDebug("Conversion found in cache for {Hash}", hash);
-                    tcs.TrySetResult(cacheResult.Value.url);
-                    return;
+                    logger.LogDebug("Conversion found in cache for {Hash}", key.Hash);
+                    return cacheResult.Value.url;
                 }
-                
-                await Task.Delay(pollIntervalMs, cancellationToken);
+
+                await timer.WaitForNextTickAsync(timeout.Token);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error polling for conversion {Hash}", hash);
-                tcs.TrySetResult(null);
-                return;
+                logger.LogError(ex, "Error polling for conversion {Hash}", key.Hash);
+                return null;
             }
         }
+
+        return null;
     }
 
-    public void NotifyConversionComplete(string hash, string url)
-    {
-        _logger.LogDebug("Notifying conversion complete for {Hash}", hash);
-        
-        if (_pendingConversions.TryGetValue(hash, out var tcs))
-        {
-            tcs.TrySetResult(url);
-        }
-    }
-
-    public void NotifyConversionFailed(string hash)
-    {
-        _logger.LogDebug("Notifying conversion failed for {Hash}", hash);
-        
-        if (_pendingConversions.TryGetValue(hash, out var tcs))
-        {
-            tcs.TrySetResult(null);
-        }
-    }
+    [SuppressMessage("ReSharper", "InconsistentNaming")]
+    private readonly record struct ConversionKey(string Hash, ImageFormat ImageFormat, VideoFormat VideoFormat);
 }

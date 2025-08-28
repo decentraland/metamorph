@@ -2,6 +2,7 @@ using System.Diagnostics;
 using FFMpegCore;
 using FFMpegCore.Enums;
 using ImageMagick;
+using MetaMorphAPI.Enums;
 using Prometheus;
 
 namespace MetaMorphAPI.Services;
@@ -14,19 +15,19 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
     private static readonly Histogram STATIC_IMAGE_HISTOGRAM = Metrics.CreateHistogram(
         "dcl_metamorph_static_image_duration_seconds",
         "Duration of static image conversions in seconds.",
-        new HistogramConfiguration { LabelNames = ["size_bucket"] }
+        new HistogramConfiguration { LabelNames = ["size_bucket", "format"] }
     );
 
     private static readonly Histogram MOTION_IMAGE_HISTOGRAM = Metrics.CreateHistogram(
         "dcl_metamorph_motion_image_duration_seconds",
         "Duration of motion image conversions in seconds.",
-        new HistogramConfiguration { LabelNames = ["size_bucket"] }
+        new HistogramConfiguration { LabelNames = ["size_bucket", "format"] }
     );
 
     private static readonly Histogram MOTION_VIDEO_HISTOGRAM = Metrics.CreateHistogram(
         "dcl_metamorph_motion_video_duration_seconds",
         "Duration of motion video conversions in seconds.",
-        new HistogramConfiguration { LabelNames = ["size_bucket"] }
+        new HistogramConfiguration { LabelNames = ["size_bucket", "format"] }
     );
 
     private const string TOKTX_ARGS_UASTC =
@@ -38,33 +39,29 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
     private const string TOKTX_ARGS_ASTC_HIGH =
         "--t2 --encode astc --astc_blk_d 4x4 --genmipmap --assign_oetf srgb \"{0}\" \"{1}\"";
 
-    public async Task<(string path, TimeSpan duration)> Convert(string inputPath, string hash, string format = "mp4")
+    public async Task<(string path, TimeSpan duration, string format, MediaType fileType)> Convert(string inputPath, string hash,
+        ImageFormat imageFormat, VideoFormat videoFormat)
     {
-        var fileType = await fileAnalyzer.GetFileType(inputPath);
+        var fileType = await fileAnalyzer.GetFormatCategory(inputPath);
 
-        logger.LogDebug("Detected file type for {Hash}: {FileType}, format: {Format}", hash, fileType, format);
+        logger.LogDebug("Detected file type for {Hash}: {FileType}", hash, fileType);
+
+        await Task.Delay(4000);
 
         return fileType switch
         {
-            FormatCategory.StaticImage => await ConvertImage(inputPath, hash, format),
-            FormatCategory.MotionImage => await ConvertFrames(inputPath, hash, format),
-            FormatCategory.MotionVideo => await ConvertVideo(inputPath, hash, format),
+            FormatCategory.StaticImage => await ConvertImage(inputPath, hash, imageFormat),
+            FormatCategory.MotionImage => await ConvertFrames(inputPath, hash, videoFormat),
+            FormatCategory.MotionVideo => await ConvertVideo(inputPath, hash, videoFormat),
             _ => throw new InvalidOperationException("Unknown file type")
         };
     }
 
-    private async Task<(string path, TimeSpan duration)> ConvertImage(string inputPath, string hash, string format = "mp4")
+    private async Task<(string path, TimeSpan duration, string format, MediaType fileType)> ConvertImage(string inputPath, string hash, ImageFormat format)
     {
-        // Only process KTX2 formats for static images
-        if (format != "astc" && format != "astc_high")
-        {
-            // For non-image formats on static images, default to standard KTX2
-            format = "ktx2";
-        }
-
         // Metrics
         var sizeBucket = GetMetricsSizeBucket(new FileInfo(inputPath).Length);
-        using var timer = STATIC_IMAGE_HISTOGRAM.WithLabels(sizeBucket).NewTimer();
+        using var timer = STATIC_IMAGE_HISTOGRAM.WithLabels(sizeBucket, format.ToString()).NewTimer();
 
         // Pre-convert
         logger.LogDebug("Pre converting {Hash}", hash);
@@ -78,30 +75,30 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
         // Cleanup
         File.Delete(preConvertedPath);
 
-        return (destinationPath, timer.ObserveDuration());
+        return (destinationPath, timer.ObserveDuration(), format.ToString(), MediaType.Image);
     }
 
-    private async Task<(string path, TimeSpan duration)> ConvertVideo(string inputPath, string hash, string format = "mp4")
+    private async Task<(string path, TimeSpan duration, string format, MediaType fileType)> ConvertVideo(string inputPath, string hash, VideoFormat format)
     {
         // Metrics
         var sizeBucket = GetMetricsSizeBucket(new FileInfo(inputPath).Length);
-        using var timer = MOTION_VIDEO_HISTOGRAM.WithLabels(sizeBucket).NewTimer();
+        using var timer = MOTION_VIDEO_HISTOGRAM.WithLabels(sizeBucket, format.ToString()).NewTimer();
 
-        var destinationPath = inputPath + $"_ffmpeg.{format}";
+        var destinationPath = inputPath + $"_ffmpeg.{format.ToString()}";
 
         logger.LogDebug("Running ffmpeg conversion for {Hash} to {Format}", hash, format);
         var success = await RunFFMpegAsync([inputPath], destinationPath, format);
 
         if (!success) throw new InvalidOperationException($"Failed to convert to {format}");
 
-        return (destinationPath, timer.ObserveDuration());
+        return (destinationPath, timer.ObserveDuration(), format.ToString(), MediaType.Video);
     }
 
-    private async Task<(string path, TimeSpan duration)> ConvertFrames(string inputPath, string hash, string format = "mp4")
+    private async Task<(string path, TimeSpan duration, string format, MediaType fileType)> ConvertFrames(string inputPath, string hash, VideoFormat format)
     {
         // Metrics
         var sizeBucket = GetMetricsSizeBucket(new FileInfo(inputPath).Length);
-        using var timer = MOTION_IMAGE_HISTOGRAM.WithLabels(sizeBucket).NewTimer();
+        using var timer = MOTION_IMAGE_HISTOGRAM.WithLabels(sizeBucket, format.ToString()).NewTimer();
 
         // Create frames directory next to input file
         var framesDirectory = inputPath + "_frames";
@@ -131,7 +128,7 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
 
         if (!success) throw new InvalidOperationException($"Failed to convert to {format}");
 
-        return (destinationPath, timer.ObserveDuration());
+        return (destinationPath, timer.ObserveDuration(), format.ToString(), MediaType.Video);
     }
 
     private async Task<string> PreprocessImage(string inputPath)
@@ -152,38 +149,16 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
     }
 
     // ReSharper disable once InconsistentNaming
-    private static Task<bool> RunFFMpegAsync(IEnumerable<string> inputPaths, string outputPath, string format = "mp4")
+    private static Task<bool> RunFFMpegAsync(IEnumerable<string> inputPaths, string outputPath, VideoFormat format)
     {
-        var inputPathsList = inputPaths.ToList();
-        
-        // For image sequences (frames), use pattern input instead of concat
-        if (inputPathsList.Count > 1 && inputPathsList.All(p => p.EndsWith(".png")))
-        {
-            // Sort the paths to ensure correct frame order
-            inputPathsList.Sort();
-            var firstPath = inputPathsList.First();
-            var directory = Path.GetDirectoryName(firstPath);
-            var pattern = Path.Combine(directory!, "frame_%03d.png");
-            
-            return FFMpegArguments
-                .FromFileInput(pattern, verifyExists: false, args => args
-                    .WithCustomArgument("-framerate 10")) // Set input framerate for image sequence
-                .OutputToFile(outputPath, true, options =>
+        // For video files, use the original concat approach
+        return FFMpegArguments
+            .FromConcatInput(inputPaths)
+            .OutputToFile(outputPath, true, options =>
+            {
+                switch (format)
                 {
-                    if (format == "ogv")
-                    {
-                        options
-                            .WithVideoCodec("libtheora") // Theora video codec for OGV
-                            .ForceFormat("ogg")
-                            .ForcePixelFormat("yuv420p") // Theora needs yuv420p
-                            .WithCustomArgument("-an") // No audio track
-                            // For Theora, use qscale:v instead of CRF (range 0-10, lower is better)
-                            .WithCustomArgument("-qscale:v 7")
-                            // Resize to max 512px width, don't upscale, maintain aspect ratio, use Lanczos alg
-                            .WithCustomArgument("-vf scale=512:-1:flags=lanczos");
-                    }
-                    else // mp4
-                    {
+                    case VideoFormat.MP4:
                         options
                             .WithVideoCodec(VideoCodec.LibX264)
                             .ForceFormat("mp4")
@@ -193,52 +168,34 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
                             .WithCustomArgument("-vf scale=512:-1:flags=lanczos")
                             .WithSpeedPreset(Speed.VeryFast)
                             .WithFastStart();
-                    }
-                })
-                .ProcessAsynchronously();
-        }
-        
-        // For video files, use the original concat approach
-        return FFMpegArguments
-            .FromConcatInput(inputPathsList)
-            .OutputToFile(outputPath, true, options =>
-            {
-                if (format == "ogv")
-                {
-                    options
-                        .WithVideoCodec("libtheora") // Theora video codec for OGV
-                        .ForceFormat("ogg")
-                        .ForcePixelFormat("yuv420p") // Theora needs yuv420p
-                        .WithCustomArgument("-an") // No audio track
-                        // For Theora, use qscale:v instead of CRF (range 0-10, lower is better)
-                        .WithCustomArgument("-qscale:v 7")
-                        // Resize to max 512px width, don't upscale, maintain aspect ratio, use Lanczos alg
-                        .WithCustomArgument("-vf scale=512:-1:flags=lanczos");
-                }
-                else // mp4
-                {
-                    options
-                        .WithVideoCodec(VideoCodec.LibX264)
-                        .ForceFormat("mp4")
-                        .ForcePixelFormat("yuv420p")
-                        .WithConstantRateFactor(28)
-                        // Resize to max 512px width, don't upscale, maintain aspect ratio, use Lanczos alg
-                        .WithCustomArgument("-vf scale=512:-1:flags=lanczos")
-                        .WithSpeedPreset(Speed.VeryFast)
-                        .WithFastStart();
+                        break;
+                    case VideoFormat.OGV:
+                        options
+                            .WithVideoCodec(VideoCodec.LibTheora) // Theora video codec for OGV
+                            .ForceFormat("ogg")
+                            .ForcePixelFormat("yuv420p") // Theora needs yuv420p
+                            .WithCustomArgument("-an") // No audio track
+                            // For Theora, use qscale:v instead of CRF (range 0-10, lower is better)
+                            .WithCustomArgument("-qscale:v 7")
+                            // Resize to max 512px width, don't upscale, maintain aspect ratio, use Lanczos alg
+                            .WithCustomArgument("-vf scale=512:-1:flags=lanczos");
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(format), format, null);
                 }
             })
             .ProcessAsynchronously();
     }
 
-    private static async Task RunToKTXAsync(string inputFilePath, string outputFilePath, string format = "ktx2")
+    private static async Task RunToKTXAsync(string inputFilePath, string outputFilePath, ImageFormat format)
     {
         // Select the appropriate arguments based on format
         var argsTemplate = format switch
         {
-            "astc" => TOKTX_ARGS_ASTC,
-            "astc_high" => TOKTX_ARGS_ASTC_HIGH,
-            _ => TOKTX_ARGS_UASTC // Default to UASTC for standard KTX2
+            ImageFormat.ASTC => TOKTX_ARGS_ASTC,
+            ImageFormat.ASTC_HIGH => TOKTX_ARGS_ASTC_HIGH,
+            ImageFormat.UASTC => TOKTX_ARGS_UASTC,
+            _ => throw new ArgumentOutOfRangeException(nameof(format), format, null)
         };
 
         var processInfo = new ProcessStartInfo

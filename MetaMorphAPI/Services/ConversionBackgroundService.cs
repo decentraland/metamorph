@@ -11,7 +11,6 @@ public class ConversionBackgroundService(
     ConverterService converterService,
     DownloadService downloadService,
     ICacheService cacheService,
-    IConversionStatusService? conversionStatusService,
     int concurrentConversions,
     ILogger<ConversionBackgroundService> logger)
     : BackgroundService
@@ -37,48 +36,40 @@ public class ConversionBackgroundService(
         // Store hash of downloaded file in Redis
         while (!ct.IsCancellationRequested)
         {
-            ConversionJob? conversionJob = null;
             try
             {
                 // Await the next job from the queue.
-                conversionJob = await queue.Dequeue(ct);
+                var conversionJob = await queue.Dequeue(ct);
 
-                logger.LogInformation("Processing conversion {Hash} from {URL} to {Format}", conversionJob.Hash, conversionJob.URL, conversionJob.Format);
+                logger.LogInformation(
+                    "Processing conversion {Hash} from {URL} (ImageFormat: {ImageFormat}, VideoFormat: {VideoFormat}",
+                    conversionJob.Hash, conversionJob.URL, conversionJob.ImageFormat, conversionJob.VideoFormat);
 
                 // Download and convert
                 var downloadResult = await downloadService.DownloadFile(conversionJob.URL, conversionJob.Hash);
-                var (convertedPath, duration) = await converterService.Convert(downloadResult.path, conversionJob.Hash, conversionJob.Format);
+                var (convertedPath, duration, format, fileType) =
+                    await converterService.Convert(downloadResult.path, conversionJob.Hash, conversionJob.ImageFormat,
+                        conversionJob.VideoFormat);
 
                 File.Delete(downloadResult.path); // Cleanup
-                
+
                 var fileInfo = new FileInfo(convertedPath);
-                logger.LogInformation("Conversion completed successfully in {Duration:F1}s for {Hash}, output size: {Size} bytes",
+                logger.LogInformation(
+                    "Conversion completed successfully in {Duration:F1}s for {Hash}, output size: {Size} bytes",
                     duration.TotalSeconds, conversionJob.Hash, fileInfo.Length);
 
                 // Push to cache
-                await cacheService.Store(conversionJob.Hash, downloadResult.eTag, downloadResult.maxAge, convertedPath);
+                await cacheService.Store(conversionJob.Hash, format, fileType, downloadResult.eTag, downloadResult.maxAge,
+                    convertedPath);
 
                 File.Delete(convertedPath); // Cleanup
 
-                logger.LogInformation("Conversion cached successfully for {Hash}", conversionJob.Hash);
-                
-                // Get the cached URL
-                var cacheResult = await cacheService.TryFetchURL(conversionJob.Hash, conversionJob.URL);
-                if (cacheResult.HasValue && conversionStatusService != null)
-                {
-                    // Notify waiting requests
-                    conversionStatusService.NotifyConversionComplete(conversionJob.Hash, cacheResult.Value.url);
-                }
+                logger.LogInformation("Conversion cached successfully for {Hash} in format \"{Format}\"",
+                    conversionJob.Hash, format);
             }
             catch (Exception e) when (!ct.IsCancellationRequested)
             {
                 logger.LogError(e, "Error running conversion");
-                
-                // Notify failure if we have the job
-                if (conversionJob != null && conversionStatusService != null)
-                {
-                    conversionStatusService.NotifyConversionFailed(conversionJob.Hash);
-                }
             }
         }
     }

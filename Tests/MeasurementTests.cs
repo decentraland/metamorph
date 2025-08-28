@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using MetaMorphAPI.Enums;
 using MetaMorphAPI.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -43,7 +44,7 @@ public class MeasurementTests
     {
         var stopwatch = Stopwatch.StartNew();
 
-        var outputPath = await _converterService.Convert(inputPath, "testhash");
+        var outputPath = await _converterService.Convert(inputPath, "testhash", ImageFormat.UASTC, VideoFormat.MP4);
 
         stopwatch.Stop();
 

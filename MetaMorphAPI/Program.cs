@@ -1,4 +1,3 @@
-using MetaMorphAPI.Services;
 using MetaMorphAPI.Utils;
 using Serilog;
 
@@ -34,9 +33,6 @@ else
     builder.SetupRemoteCache(localWorker ||
                              builder.Environment.IsDevelopment()); // With local worker we need to setup S3
 }
-
-// Register ConversionStatusService after cache service is registered
-builder.Services.AddSingleton<IConversionStatusService, ConversionStatusService>();
 
 var app = builder.Build();
 

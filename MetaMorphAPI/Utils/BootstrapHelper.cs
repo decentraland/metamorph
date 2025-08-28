@@ -48,7 +48,7 @@ public static class BootstrapHelper
         Directory.CreateDirectory(tempDirectory);
 
         builder.Services.AddSingleton<FileAnalyzerService>();
-        
+
         builder.Services.AddSingleton<ConverterService>(sp =>
             new ConverterService(
                 tempDirectory,
@@ -62,13 +62,20 @@ public static class BootstrapHelper
                 builder.GetRequiredConfig<int>("MetaMorph:MaxDownloadFileSizeMB") * 1024L * 1024L
             ));
 
+        builder.Services.AddSingleton<ConversionStatusService>(sp =>
+            new ConversionStatusService(
+                sp.GetRequiredService<ICacheService>(),
+                TimeSpan.FromSeconds(builder.GetRequiredConfig<int>("MetaMorph:WaitTimeoutSeconds")),
+                TimeSpan.FromMilliseconds(builder.GetRequiredConfig<int>("MetaMorph:WaitPoolIntervalMilliseconds")),
+                sp.GetRequiredService<ILogger<ConversionStatusService>>()
+            ));
+
         builder.Services.AddHostedService<ConversionBackgroundService>(sp =>
             new ConversionBackgroundService(
                 sp.GetRequiredService<IConversionQueue>(),
                 sp.GetRequiredService<ConverterService>(),
                 sp.GetRequiredService<DownloadService>(),
                 sp.GetRequiredService<ICacheService>(),
-                sp.GetService<IConversionStatusService>(), // Optional - may be null
                 builder.GetRequiredConfig<int>("MetaMorph:ConcurrentConversions"),
                 sp.GetRequiredService<ILogger<ConversionBackgroundService>>()
             ));

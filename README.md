@@ -22,31 +22,39 @@ To run from your IDE you can use the "MetaMorphAPI: Local AWS" configuration. Th
 The service exposes a single endpoint for media conversion:
 
 ```
-GET /convert?url=<media_url>&format=<format>&wait=<bool>
+GET /convert?url=<media_url>&imageFormat=<format>&videoFormat=<format>&wait=<bool>
 ```
 
 ### Parameters
 
 - **url** (required): The URL of the media file to convert
-- **format** (optional): The desired output format
-  - For images: `astc` (8x8 block size), `astc_high` (4x4 block size)
-  - For videos: `mp4` (default), `ogv`
-  - If not specified, defaults to standard conversion (KTX2 for images, MP4 for videos)
+- **imageFormat** (optional): The desired output format for images. Valid values:
+  - `astc` (8x8 block size)
+  - `astc_high` (4x4 block size)
+  - `uastc` (default)
+- **videoFormat** (optional): The desired output format for videos. Valid values:
+  - `mp4` (default)
+  - `ogv`
 - **wait** (optional): If `true`, holds the request until conversion completes (max 20 seconds)
   - On success: redirects to the converted file
-  - On timeout/failure: redirects to the original URL
+  - On timeout: responds with `202 Accepted`
+
+Specifying both `videoFormat` and `imageFormat` is valid and the converter will use the appropriate one when it determines if the url contains a video or an image file.
 
 ### Examples
 
 ```bash
 # Convert image to KTX2 with ASTC compression
-curl -L "http://localhost:5133/convert?url=https://example.com/image.jpg&format=astc"
+curl -L "http://localhost:5133/convert?url=https://example.com/image.jpg&imageFormat=astc"
 
 # Convert video to OGV format
-curl -L "http://localhost:5133/convert?url=https://example.com/video.mp4&format=ogv"
+curl -L "http://localhost:5133/convert?url=https://example.com/video.mp4&videoFormat=ogv"
+
+# Convert video or image to specified format
+curl -L "http://localhost:5133/convert?url=https://example.com/fileOfUnknownFormat&videoFormat=ogv&imageFormat=astc"
 
 # Convert and wait for completion
-curl -L "http://localhost:5133/convert?url=https://example.com/image.png&format=astc_high&wait=true"
+curl -L "http://localhost:5133/convert?url=https://example.com/image.png&imageFormat=astc_high&wait=true"
 ```
 
 ## Supported Formats
@@ -57,9 +65,12 @@ curl -L "http://localhost:5133/convert?url=https://example.com/image.png&format=
 
 ### Output
 - **Images**: KTX2 container with:
-  - UASTC compression (default)
-  - ASTC 8x8 compression (`format=astc`)
-  - ASTC 4x4 compression (`format=astc_high`)
+  - UASTC compression (default) (`imageFormat=uastc`)
+  - ASTC 8x8 compression (`imageFormat=astc`)
+  - ASTC 4x4 compression (`imageFormat=astc_high`)
 - **Videos**: 
-  - MP4 with H.264 encoding (default)
-  - OGV with Theora encoding (`format=ogv`)
+  - MP4 with H.264 encoding (default) (`videoFormat=mp4`)
+  - OGV with Theora encoding (`videoFormat=ogv`)
+
+## Known Issues
+- If two requests are made one after another for the same image, but have different `videoFormat` values (or the other way around) the converter will process the image twice.

@@ -1,5 +1,7 @@
+using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Text;
+using MetaMorphAPI.Enums;
 using MetaMorphAPI.Services;
 using MetaMorphAPI.Services.Cache;
 using MetaMorphAPI.Services.Queue;
@@ -15,7 +17,7 @@ namespace MetaMorphAPI.Controllers;
 public class ConvertController(
     ICacheService cacheService,
     IConversionQueue conversionQueue,
-    IConversionStatusService conversionStatusService,
+    ConversionStatusService conversionStatusService,
     IConfiguration configuration,
     ILogger<ConvertController> logger) : ControllerBase
 {
@@ -23,26 +25,40 @@ public class ConvertController(
 
     [HttpGet("/convert")]
     [HttpHead("/convert")]
-    public async Task<IActionResult> Convert([FromQuery] string url, [FromQuery] string? format = null, [FromQuery] bool wait = false)
+    public async Task<IActionResult> Convert(
+        [FromQuery, Required, Url] string url,
+        [FromQuery] ImageFormat imageFormat = ImageFormat.UASTC,
+        [FromQuery] VideoFormat videoFormat = VideoFormat.MP4,
+        [FromQuery] bool wait = false
+    )
     {
-        if (string.IsNullOrWhiteSpace(url))
-            return BadRequest("Query parameter url is required.");
+        var hash = ComputeSha256(url);
 
-        // Validate format parameter
-        var validFormats = new[] { "mp4", "ogv", "astc", "astc_high" };
-        if (!string.IsNullOrWhiteSpace(format) && !validFormats.Contains(format))
-            return BadRequest($"Format parameter must be one of: {string.Join(", ", validFormats)}");
+        logger.LogInformation("Conversion requested for {URL} - {Hash} ({ImageFormat} | {VideoFormat}).", url, hash, imageFormat, videoFormat);
 
-        // Default to mp4 if no format specified
-        format ??= "mp4";
-
-        var hash = ComputeSha256WithFormat(url, format);
-
-        logger.LogInformation("Conversion requested for {URL} - {Hash} (format: {Format}).", url, hash, format);
-
-        var cacheResult = await cacheService.TryFetchURL(hash, url);
+        var cacheResult = await cacheService.TryFetchURL(hash, url, imageFormat, videoFormat);
         var cachedURL = cacheResult?.url;
         var expired = cacheResult?.expired ?? false;
+        var format = cacheResult?.format;
+
+        if (cacheResult == null || cacheResult.Value.expired)
+        {
+            logger.LogInformation("Queuing conversion for {Hash} ({ImageFormat} | {VideoFormat}", hash, imageFormat, videoFormat);
+            await conversionQueue.Enqueue(new ConversionJob(hash, url, imageFormat, videoFormat));
+
+            // If wait is requested, wait for conversion
+            if (wait)
+            {
+                logger.LogInformation("Waiting for conversion {Hash} to complete", hash);
+                cachedURL = await conversionStatusService.WaitForConversionAsync(hash, imageFormat, videoFormat);
+
+                if (string.IsNullOrEmpty(cachedURL))
+                {
+                    logger.LogWarning("Conversion wait timed out for {Hash}", hash);
+                    return Accepted();
+                }
+            }
+        }
 
         if (cachedURL != null)
         {
@@ -54,41 +70,7 @@ public class ConvertController(
                 cachedURL = builder.Uri.ToString();
             }
 
-            logger.LogInformation("Conversion exists for {Hash} (expired: {Expired}) at {URL}", hash, expired,
-                cachedURL);
-        }
-
-        if (cacheResult == null || cacheResult.Value.expired)
-        {
-            logger.LogInformation("Queuing conversion for {Hash} with format {Format}", hash, format);
-            await conversionQueue.Enqueue(new ConversionJob(hash, url, format));
-            
-            // If wait is requested, wait for conversion
-            if (wait)
-            {
-                logger.LogInformation("Waiting for conversion {Hash} to complete", hash);
-                var timeout = TimeSpan.FromSeconds(20);
-                var resultUrl = await conversionStatusService.WaitForConversionAsync(hash, timeout);
-                
-                if (!string.IsNullOrEmpty(resultUrl))
-                {
-                    // Override S3 host for external redirects, if specified
-                    if (!string.IsNullOrWhiteSpace(_s3HostOverride))
-                    {
-                        var uri = new Uri(resultUrl);
-                        var builder = new UriBuilder(uri) { Host = _s3HostOverride };
-                        resultUrl = builder.Uri.ToString();
-                    }
-                    
-                    logger.LogInformation("Conversion completed for {Hash}, redirecting to {URL}", hash, resultUrl);
-                    return Redirect(resultUrl);
-                }
-                else
-                {
-                    logger.LogWarning("Conversion timed out or failed for {Hash}, redirecting to original", hash);
-                    return Redirect(url);
-                }
-            }
+            logger.LogInformation("Conversion exists for {Hash} (expired: {Expired}, format:{Format}) at {URL}", hash, expired, format, cachedURL);
         }
 
         // Redirect to cached URL if it exists or to the original
@@ -97,14 +79,6 @@ public class ConvertController(
 
     private static string ComputeSha256(string input)
     {
-        var bytes = Encoding.UTF8.GetBytes(input);
-        var hash = SHA256.HashData(bytes);
-        return System.Convert.ToHexString(hash).ToLowerInvariant();
-    }
-
-    private static string ComputeSha256WithFormat(string url, string format)
-    {
-        var input = $"{url}_{format}";
         var bytes = Encoding.UTF8.GetBytes(input);
         var hash = SHA256.HashData(bytes);
         return System.Convert.ToHexString(hash).ToLowerInvariant();

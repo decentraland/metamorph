@@ -23,7 +23,7 @@ public class RemoteConversionQueue(
 
     public async Task Enqueue(ConversionJob job, CancellationToken ct = default)
     {
-        if (!await _redisDb.StringSetAsync(RedisKeys.GetConvertingKey(job.Hash), "1", _conversionExpiry, When.NotExists))
+        if (!await _redisDb.StringSetAsync(RedisKeys.GetConvertingKey(job.Hash, job.ImageFormat, job.VideoFormat), "1", _conversionExpiry, When.NotExists))
         {
             // Already queued
             logger.LogInformation("Conversion already enqueued, skipping: {Hash}", job.Hash);
