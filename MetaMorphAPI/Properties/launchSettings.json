@@ -12,7 +12,7 @@
         "MetaMorph__LocalWorker": "true",
         "MetaMorph__StartLocalInfra": "true",
         "AWS__S3PublicHost": "",
-        "SENTRY_DSN": "https://a98890fa4bdf8c50109fe0a91987943c@o4504361728212992.ingest.us.sentry.io/4509927534166016"
+        "SENTRY_DSN": "test"
       }
     },
     "Local AWS": {
@@ -26,7 +26,7 @@
         "MetaMorph__StartLocalInfra": "true",
         "AWS_ACCESS_KEY_ID": "test",
         "AWS_SECRET_ACCESS_KEY": "test",
-        "SENTRY_DSN": "https://a98890fa4bdf8c50109fe0a91987943c@o4504361728212992.ingest.us.sentry.io/4509927534166016"
+        "SENTRY_DSN": "test"
       }
     }
   }
