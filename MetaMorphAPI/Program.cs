@@ -34,6 +34,10 @@ else
                              builder.Environment.IsDevelopment()); // With local worker we need to setup S3
 }
 
+// Setup ConversionStatusService (needed for wait parameter support)
+// Must be after cache setup as it depends on ICacheService
+builder.SetupConversionStatusService();
+
 var app = builder.Build();
 
 // Configure static files for serving content

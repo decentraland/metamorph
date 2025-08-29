@@ -37,6 +37,17 @@ public static class BootstrapHelper
         builder.Services.AddHealthChecks();
     }
 
+    public static void SetupConversionStatusService(this IHostApplicationBuilder builder)
+    {
+        builder.Services.AddSingleton<ConversionStatusService>(sp =>
+            new ConversionStatusService(
+                sp.GetRequiredService<ICacheService>(),
+                TimeSpan.FromSeconds(builder.GetRequiredConfig<int>("MetaMorph:WaitTimeoutSeconds")),
+                TimeSpan.FromMilliseconds(builder.GetRequiredConfig<int>("MetaMorph:WaitPoolIntervalMilliseconds")),
+                sp.GetRequiredService<ILogger<ConversionStatusService>>()
+            ));
+    }
+
     public static void SetupConverter(this IHostApplicationBuilder builder)
     {
         var tempDirectory = Path.Combine(Path.GetTempPath(), TEMP_DIRECTORY_NAME);
@@ -60,14 +71,6 @@ public static class BootstrapHelper
                 tempDirectory,
                 sp.GetRequiredService<HttpClient>(),
                 builder.GetRequiredConfig<int>("MetaMorph:MaxDownloadFileSizeMB") * 1024L * 1024L
-            ));
-
-        builder.Services.AddSingleton<ConversionStatusService>(sp =>
-            new ConversionStatusService(
-                sp.GetRequiredService<ICacheService>(),
-                TimeSpan.FromSeconds(builder.GetRequiredConfig<int>("MetaMorph:WaitTimeoutSeconds")),
-                TimeSpan.FromMilliseconds(builder.GetRequiredConfig<int>("MetaMorph:WaitPoolIntervalMilliseconds")),
-                sp.GetRequiredService<ILogger<ConversionStatusService>>()
             ));
 
         builder.Services.AddHostedService<ConversionBackgroundService>(sp =>

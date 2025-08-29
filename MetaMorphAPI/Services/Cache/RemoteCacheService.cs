@@ -34,7 +34,7 @@ public class RemoteCacheService(
             throw new InvalidOperationException("Bucket name not configured");
         }
 
-        var extension = Path.GetExtension(sourcePath);
+        var extension = Path.GetExtension(sourcePath).ToLowerInvariant();
         var contentType = extension switch
         {
             ".ktx2" => "image/ktx2",
