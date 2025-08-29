@@ -130,6 +130,10 @@ public static class BootstrapHelper
             builder.Services.AddAWSService<IAmazonS3>(builder.Configuration.GetAWSOptions<AmazonS3Config>());
         }
 
+        // Cache refresh
+        builder.Services.AddSingleton<CacheRefreshQueue>();
+        builder.Services.AddHostedService<CacheRefreshBackgroundService>();
+
         // Register the RemoteCacheService
         builder.Services.AddSingleton<ICacheService>(sp =>
             new RemoteCacheService(
@@ -137,6 +141,7 @@ public static class BootstrapHelper
                 setupS3 ? builder.GetRequiredConfig<string>("AWS:S3BucketName") : null,
                 sp.GetRequiredService<ConnectionMultiplexer>(),
                 sp.GetRequiredService<HttpClient>(),
+                sp.GetRequiredService<CacheRefreshQueue>(),
                 sp.GetRequiredService<ILogger<RemoteCacheService>>(),
                 builder.GetRequiredConfig<int>("MetaMorph:MinMaxAgeMinutes")
             ));

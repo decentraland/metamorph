@@ -8,12 +8,11 @@ namespace MetaMorphAPI.Services.Queue;
 /// </summary>
 public interface IConversionQueue
 {
-    
     /// <summary>
     /// Adds a new conversion to the queue.
     /// </summary>
     Task Enqueue(ConversionJob job, CancellationToken ct = default);
-    
+
     /// <summary>
     /// Takes a conversion from the queue. This will block if the queue is empty until a conversion is Enqueued.
     /// </summary>

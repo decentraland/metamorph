@@ -21,7 +21,7 @@ public class LocalCacheService(string storagePath, ILogger<LocalCacheService> lo
         return Task.CompletedTask;
     }
 
-    public Task<(string url, bool expired, string format)?> TryFetchURL(string hash, string? url,
+    public Task<CacheResult?> TryFetchURL(string hash, string? url,
         ImageFormat imageFormat, VideoFormat videoFormat)
     {
         foreach (var format in Enum.GetNames<ImageFormat>().Concat(Enum.GetNames<VideoFormat>()))
@@ -29,10 +29,15 @@ public class LocalCacheService(string storagePath, ILogger<LocalCacheService> lo
             var filePath = Path.Combine(storagePath, $"{hash}.{format}");
             if (File.Exists(filePath))
             {
-                return Task.FromResult<(string, bool, string)?>(($"/converted/{hash}.{format}", false, format));
+                return Task.FromResult<CacheResult?>(new CacheResult($"/converted/{hash}.{format}", null, false, false, format));
             }
         }
 
-        return Task.FromResult<(string, bool, string)?>(null);
+        return Task.FromResult<CacheResult?>(null);
+    }
+
+    public Task<bool> IsExpired(string hash, ImageFormat imageFormat, VideoFormat videoFormat, CancellationToken ct)
+    {
+        return Task.FromResult(false);
     }
 }

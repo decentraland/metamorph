@@ -37,11 +37,8 @@ public class ConvertController(
         logger.LogInformation("Conversion requested for {URL} - {Hash} ({ImageFormat} | {VideoFormat}).", url, hash, imageFormat, videoFormat);
 
         var cacheResult = await cacheService.TryFetchURL(hash, url, imageFormat, videoFormat);
-        var cachedURL = cacheResult?.url;
-        var expired = cacheResult?.expired ?? false;
-        var format = cacheResult?.format;
 
-        if (cacheResult == null || cacheResult.Value.expired)
+        if (cacheResult == null)
         {
             logger.LogInformation("Queuing conversion for {Hash} ({ImageFormat} | {VideoFormat}", hash, imageFormat, videoFormat);
             await conversionQueue.Enqueue(new ConversionJob(hash, url, imageFormat, videoFormat));
@@ -50,9 +47,9 @@ public class ConvertController(
             if (wait)
             {
                 logger.LogInformation("Waiting for conversion {Hash} to complete", hash);
-                cachedURL = await conversionStatusService.WaitForConversionAsync(hash, imageFormat, videoFormat);
+                cacheResult = await conversionStatusService.WaitForConversionAsync(hash, imageFormat, videoFormat);
 
-                if (string.IsNullOrEmpty(cachedURL))
+                if (cacheResult == null)
                 {
                     logger.LogWarning("Conversion wait timed out for {Hash}", hash);
                     return Accepted();
@@ -60,21 +57,25 @@ public class ConvertController(
             }
         }
 
-        if (cachedURL != null)
+        if (cacheResult is { } result)
         {
+            var cachedURL = result.URL;
+            
             // Override S3 host for external redirects, if specified
             if (!string.IsNullOrWhiteSpace(_s3HostOverride))
             {
-                var uri = new Uri(cachedURL);
+                var uri = new Uri(result.URL);
                 var builder = new UriBuilder(uri) { Host = _s3HostOverride };
                 cachedURL = builder.Uri.ToString();
             }
 
-            logger.LogInformation("Conversion exists for {Hash} (expired: {Expired}, format:{Format}) at {URL}", hash, expired, format, cachedURL);
+            logger.LogInformation("Conversion exists for {Hash}: {CacheResult}", hash, cacheResult.Value);
+            
+            return Redirect(cachedURL);
         }
 
-        // Redirect to cached URL if it exists or to the original
-        return Redirect(cachedURL ?? url);
+        // Redirect to original
+        return Redirect(url);
     }
 
     private static string ComputeSha256(string input)

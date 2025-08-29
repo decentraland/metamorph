@@ -14,21 +14,21 @@ public class ConversionStatusService(
     TimeSpan pollInterval,
     ILogger<ConversionStatusService> logger)
 {
-    private readonly ConcurrentDictionary<ConversionKey, Task<string?>> _pendingConversions = new();
+    private readonly ConcurrentDictionary<ConversionKey, Task<CacheResult?>> _pendingConversions = new();
 
-    public Task<string?> WaitForConversionAsync(string hash, ImageFormat imageFormat, VideoFormat videoFormat)
+    public Task<CacheResult?> WaitForConversionAsync(string hash, ImageFormat imageFormat, VideoFormat videoFormat)
     {
         var key = new ConversionKey(hash, imageFormat, videoFormat);
-        
+
         // We pass all the arguments manually so we don't do a clojure allocation.
-        return _pendingConversions.GetOrAdd(key, static (key, args) => 
+        return _pendingConversions.GetOrAdd(key, static (key, args) =>
                 PollAndRemoveAsync(key, args.waitTimeout, args.pollInterval, args.cacheService, args.logger, args._pendingConversions),
             (_pendingConversions, waitTimeout, pollInterval, cacheService, logger));
     }
 
-    private static async Task<string?> PollAndRemoveAsync(ConversionKey key, TimeSpan waitTimeout,
+    private static async Task<CacheResult?> PollAndRemoveAsync(ConversionKey key, TimeSpan waitTimeout,
         TimeSpan pollInterval, ICacheService cacheService, ILogger<ConversionStatusService> logger,
-        ConcurrentDictionary<ConversionKey, Task<string?>> pendingConversions)
+        ConcurrentDictionary<ConversionKey, Task<CacheResult?>> pendingConversions)
     {
         try
         {
@@ -41,7 +41,7 @@ public class ConversionStatusService(
         }
     }
 
-    private static async Task<string?> PollForConversionAsync(ConversionKey key, TimeSpan waitTimeout,
+    private static async Task<CacheResult?> PollForConversionAsync(ConversionKey key, TimeSpan waitTimeout,
         TimeSpan pollInterval, ICacheService cacheService, ILogger<ConversionStatusService> logger)
     {
         using var timeout = new CancellationTokenSource(waitTimeout);
@@ -52,11 +52,10 @@ public class ConversionStatusService(
             try
             {
                 // Check cache for completion
-                var cacheResult = await cacheService.TryFetchURL(key.Hash, null, key.ImageFormat, key.VideoFormat);
-                if (cacheResult.HasValue)
+                if (await cacheService.TryFetchURL(key.Hash, null, key.ImageFormat, key.VideoFormat) is { } result)
                 {
                     logger.LogDebug("Conversion found in cache for {Hash}", key.Hash);
-                    return cacheResult.Value.url;
+                    return result;
                 }
 
                 await timer.WaitForNextTickAsync(timeout.Token);

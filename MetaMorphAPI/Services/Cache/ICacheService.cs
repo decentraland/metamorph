@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using MetaMorphAPI.Enums;
 
 namespace MetaMorphAPI.Services.Cache;
@@ -15,5 +16,10 @@ public interface ICacheService
     /// <summary>
     /// Gets the URL of the cached file. If the file isn't cached it returns null.
     /// </summary>
-    Task<(string url, bool expired, string format)?> TryFetchURL(string hash, string? url, ImageFormat imageFormat, VideoFormat videoFormat);
+    Task<CacheResult?> TryFetchURL(string hash, string? url, ImageFormat imageFormat, VideoFormat videoFormat);
+
+    Task<bool> IsExpired(string hash, ImageFormat imageFormat, VideoFormat videoFormat, CancellationToken ct);
 }
+
+[SuppressMessage("ReSharper", "InconsistentNaming")]
+public readonly record struct CacheResult(string URL, string? ETag, bool Expired, bool Converting, string Format);

@@ -1,7 +1,13 @@
 using MetaMorphAPI.Utils;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+if (builder.Environment.IsProduction())
+{
+    builder.WebHost.UseSentry();
+}
 
 builder.Services.AddHttpClient();
 

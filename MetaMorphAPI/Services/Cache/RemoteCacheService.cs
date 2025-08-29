@@ -15,6 +15,7 @@ public class RemoteCacheService(
     string? bucketName,
     ConnectionMultiplexer redis,
     HttpClient httpClient,
+    CacheRefreshQueue cacheRefreshQueue,
     ILogger<RemoteCacheService> logger,
     int minMaxAgeMinutes)
     : ICacheService
@@ -108,8 +109,57 @@ public class RemoteCacheService(
     /// <summary>
     /// Retrieves the S3 URL for the converted file from Redis using the hash.
     /// </summary>
-    public async Task<(string url, bool expired, string format)?> TryFetchURL(string hash, string? url,
+    public async Task<CacheResult?> TryFetchURL(string hash, string? url,
         ImageFormat imageFormat, VideoFormat videoFormat)
+    {
+        var cacheResult = await GetCacheData(hash, imageFormat, videoFormat);
+        
+        if (cacheResult == null)
+        {
+            return null;
+        }
+
+        if (cacheResult.Value is { Expired: true, Converting: false } && url != null)
+        {
+            logger.LogInformation("Cache is expired for {Hash}", hash);
+            await cacheRefreshQueue.EnqueueAsync(new CacheRefreshRequest(hash, url, imageFormat, videoFormat));
+        }
+
+        return cacheResult;
+    }
+
+    public async Task<bool> IsExpired(string hash, ImageFormat imageFormat, VideoFormat videoFormat, CancellationToken ct)
+    {
+        if (await GetCacheData(hash, imageFormat, videoFormat) is { } result)
+        {
+            if (result.ETag != null)
+            {
+                var request = new HttpRequestMessage(HttpMethod.Head, result.URL);
+                request.Headers.IfNoneMatch.ParseAdd(result.ETag);
+
+                using var response = await httpClient.SendAsync(request, ct)
+                    .ConfigureAwait(false);
+
+                if (response.StatusCode == HttpStatusCode.NotModified)
+                {
+                    var maxAge = SanitizeMaxAge(response.Headers.CacheControl?.MaxAge);
+
+                    logger.LogInformation("Source not modified for {Hash}, resetting TTL to {MaxAge}", hash, maxAge?.ToString());
+                    await _redisDb.StringSetAsync(RedisKeys.GetValidKey(hash, result.Format), "1", maxAge, When.Always);
+
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        
+        logger.LogError("Invalid expiry for {Hash}", hash);
+        // If this were to happen we say that the hash is not expired
+        return true;
+    }
+
+    private async Task<CacheResult?> GetCacheData(string hash, ImageFormat imageFormat, VideoFormat videoFormat)
     {
         var storedFileType = await _redisDb.StringGetAsync(RedisKeys.GetFileTypeKey(hash));
 
@@ -134,36 +184,7 @@ public class RemoteCacheService(
         var expired = results[2].IsNullOrEmpty;
         var converting = !results[3].IsNullOrEmpty;
 
-        if (cachedUrl == null)
-        {
-            return null;
-        }
-
-        // TODO: Extract this to a separate service so it doesn't block the request
-        if (expired && !converting && url != null)
-        {
-            logger.LogInformation("Cache is expired for {Hash} with ETag:{ETag}", hash, eTag);
-            if (eTag != null)
-            {
-                var request = new HttpRequestMessage(HttpMethod.Head, url);
-                request.Headers.IfNoneMatch.ParseAdd(eTag);
-
-                using var response = await httpClient.SendAsync(request)
-                    .ConfigureAwait(false);
-
-                if (response.StatusCode == HttpStatusCode.NotModified)
-                {
-                    expired = false;
-                    var maxAge = SanitizeMaxAge(response.Headers.CacheControl?.MaxAge);
-
-                    logger.LogInformation("Source not modified for {Hash}, resetting TTL to {MaxAge}", hash,
-                        maxAge?.ToString());
-                    await _redisDb.StringSetAsync(RedisKeys.GetValidKey(hash, format), "1", maxAge, When.Always);
-                }
-            }
-        }
-
-        return (cachedUrl, expired, format);
+        return cachedUrl == null ? null : new CacheResult(cachedUrl, eTag, expired, converting, format);
     }
 
     /// <summary>
