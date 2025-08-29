@@ -46,8 +46,6 @@ public class ConverterService(string tempDirectory, FileAnalyzerService fileAnal
 
         logger.LogDebug("Detected file type for {Hash}: {FileType}", hash, fileType);
 
-        await Task.Delay(4000);
-
         return fileType switch
         {
             FormatCategory.StaticImage => await ConvertImage(inputPath, hash, imageFormat),
