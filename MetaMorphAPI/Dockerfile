@@ -1,12 +1,18 @@
 ﻿# Stage 0: Build KTX-Software from source
-FROM alpine:latest AS ktx-builder
+FROM --platform=$BUILDPLATFORM alpine:latest AS ktx-builder
 ARG KTX_VERSION=4.4.0
-RUN apk add --no-cache bash cmake make g++ git zlib-dev bzip2-dev libstdc++ ninja \
+ARG TARGETARCH
+RUN apk add --no-cache bash cmake make g++ git zlib-dev bzip2-dev libstdc++ ninja python3 \
     && git clone --branch v${KTX_VERSION} --depth 1 https://github.com/KhronosGroup/KTX-Software.git /tmp/KTX-Software \
+    && cd /tmp/KTX-Software \
+    && git submodule update --init --recursive --depth 1 \
     && cmake -G Ninja -S /tmp/KTX-Software -B /tmp/KTX-Software/build \
          -DBUILD_SHARED_LIBS=OFF \
          -DCMAKE_BUILD_TYPE=Release \
          -DCMAKE_INSTALL_PREFIX=/out \
+         -DKTX_FEATURE_STATIC_LIBRARY=ON \
+         -DKTX_FEATURE_TOOLS=ON \
+         -DBASISU_SUPPORT_ASTC=ON \
     && cmake --build /tmp/KTX-Software/build --target install \
     && rm -rf /tmp/KTX-Software
 
@@ -17,12 +23,18 @@ USER $APP_UID
 WORKDIR /app
 EXPOSE 8080
 
-# Install ffmpeg
+# Install ffmpeg and required libraries for toktx and ImageMagick
 USER root
-RUN apk add --no-cache ffmpeg
+RUN apk add --no-cache ffmpeg libstdc++ libgomp \
+    # ImageMagick runtime dependencies
+    imagemagick imagemagick-libs \
+    # Compatibility library for glibc apps
+    libc6-compat
 
 # Copy toktx from builder stage
 COPY --from=ktx-builder /out/bin/toktx /usr/local/bin/
+# Make sure it's executable
+RUN chmod +x /usr/local/bin/toktx
 USER $APP_UID
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build

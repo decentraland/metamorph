@@ -1,8 +1,10 @@
 using System.Collections.Immutable;
 using System.Runtime.InteropServices;
+using MetaMorphAPI.Enums;
 using MimeDetective;
 using MimeDetective.Definitions;
 using MimeDetective.Storage;
+using FileType = MimeDetective.Storage.FileType;
 
 namespace MetaMorphAPI.Services;
 
@@ -72,7 +74,7 @@ public class FileAnalyzerService
         }.Build();
     }
 
-    public async Task<FormatCategory> GetFileType(string inputPath)
+    public async Task<FormatCategory> GetFormatCategory(string inputPath)
     {
         // Read only the header (4 KB) rather than the entire file.
         const int HEADER_SIZE = 4096;
@@ -119,36 +121,4 @@ public class FileAnalyzerService
 
         return FormatCategory.Other;
     }
-}
-
-public enum FormatCategory
-{
-    /// <summary>
-    /// Formats that are static images:
-    /// - PNG
-    /// - JPG
-    /// - SVG
-    /// - Static WebP
-    /// - ...
-    /// </summary>
-    StaticImage,
-
-    /// <summary>
-    /// Formats that need frames extracted before converting to video:
-    /// - Animated WebP
-    /// </summary>
-    MotionImage,
-
-    /// <summary>
-    /// Formats that can be directly converted to video:
-    /// - GIF
-    /// - MP4
-    /// - ...
-    /// </summary>
-    MotionVideo,
-
-    /// <summary>
-    /// Unrecognized / unsupported formats.
-    /// </summary>
-    Other,
 }

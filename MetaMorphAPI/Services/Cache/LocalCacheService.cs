@@ -1,3 +1,5 @@
+using MetaMorphAPI.Enums;
+
 namespace MetaMorphAPI.Services.Cache;
 
 /// <summary>
@@ -5,10 +7,9 @@ namespace MetaMorphAPI.Services.Cache;
 /// </summary>
 public class LocalCacheService(string storagePath, ILogger<LocalCacheService> logger) : ICacheService
 {
-    public Task Store(string hash, string? eTag, TimeSpan? maxAge, string sourcePath)
+    public Task Store(string hash, string format, MediaType mediaType, string? eTag, TimeSpan? maxAge, string sourcePath)
     {
-        var extension = Path.GetExtension(sourcePath);
-        var destinationPath = Path.Combine(storagePath, $"{hash}{extension}");
+        var destinationPath = Path.Combine(storagePath, $"{hash}.{format}");
 
         if (File.Exists(destinationPath))
         {
@@ -20,17 +21,18 @@ public class LocalCacheService(string storagePath, ILogger<LocalCacheService> lo
         return Task.CompletedTask;
     }
 
-    public Task<(string url, bool expired)?> TryFetchURL(string hash, string url)
+    public Task<(string url, bool expired, string format)?> TryFetchURL(string hash, string? url,
+        ImageFormat imageFormat, VideoFormat videoFormat)
     {
-        foreach (var ext in new[] { "ktx2", "mp4" })
+        foreach (var format in Enum.GetNames<ImageFormat>().Concat(Enum.GetNames<VideoFormat>()))
         {
-            var filePath = Path.Combine(storagePath, $"{hash}.{ext}");
+            var filePath = Path.Combine(storagePath, $"{hash}.{format}");
             if (File.Exists(filePath))
             {
-                return Task.FromResult<(string, bool)?>(($"/converted/{hash}.{ext}", false));
+                return Task.FromResult<(string, bool, string)?>(($"/converted/{hash}.{format}", false, format));
             }
         }
 
-        return Task.FromResult<(string, bool)?>(null);
+        return Task.FromResult<(string, bool, string)?>(null);
     }
 }

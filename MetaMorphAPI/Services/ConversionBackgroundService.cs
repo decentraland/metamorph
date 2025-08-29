@@ -41,23 +41,31 @@ public class ConversionBackgroundService(
                 // Await the next job from the queue.
                 var conversionJob = await queue.Dequeue(ct);
 
-                logger.LogInformation("Processing conversion {Hash} from {URL}", conversionJob.Hash, conversionJob.URL);
+                logger.LogInformation(
+                    "Processing conversion {Hash} from {URL} (ImageFormat: {ImageFormat}, VideoFormat: {VideoFormat}",
+                    conversionJob.Hash, conversionJob.URL, conversionJob.ImageFormat, conversionJob.VideoFormat);
 
                 // Download and convert
                 var downloadResult = await downloadService.DownloadFile(conversionJob.URL, conversionJob.Hash);
-                var (convertedPath, duration) = await converterService.Convert(downloadResult.path, conversionJob.Hash);
+                var (convertedPath, duration, format, fileType) =
+                    await converterService.Convert(downloadResult.path, conversionJob.Hash, conversionJob.ImageFormat,
+                        conversionJob.VideoFormat);
 
                 File.Delete(downloadResult.path); // Cleanup
 
-                logger.LogInformation("Conversion completed successfully in {Duration:F1}s for {Hash}",
-                    duration.TotalSeconds, conversionJob.Hash);
+                var fileInfo = new FileInfo(convertedPath);
+                logger.LogInformation(
+                    "Conversion completed successfully in {Duration:F1}s for {Hash}, output size: {Size} bytes",
+                    duration.TotalSeconds, conversionJob.Hash, fileInfo.Length);
 
                 // Push to cache
-                await cacheService.Store(conversionJob.Hash, downloadResult.eTag, downloadResult.maxAge, convertedPath);
+                await cacheService.Store(conversionJob.Hash, format, fileType, downloadResult.eTag, downloadResult.maxAge,
+                    convertedPath);
 
                 File.Delete(convertedPath); // Cleanup
 
-                logger.LogInformation("Conversion cached successfully for {Hash}", conversionJob.Hash);
+                logger.LogInformation("Conversion cached successfully for {Hash} in format \"{Format}\"",
+                    conversionJob.Hash, format);
             }
             catch (Exception e) when (!ct.IsCancellationRequested)
             {

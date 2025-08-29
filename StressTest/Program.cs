@@ -1,5 +1,5 @@
-﻿const string API = "https://metamorph-api.decentraland.org/convert?url={0}";
-// const string API = "https://metamorph-api.decentraland.zone/convert?url={0}";
+﻿//const string API = "https://metamorph-api.decentraland.org/convert?url={0}";
+ const string API = "https://metamorph-api.decentraland.zone/convert?url={0}";
 // const string API = "http://localhost:5133/convert?url={0}";
 const string IMG_URL_PNG =
     "https://media.githubusercontent.com/media/decentraland/metamorph/refs/heads/main/Tests/Assets/measurement/img{0}/{1}.png?timestamp={2}_{3}";
@@ -12,7 +12,7 @@ const string IMG_URL_MP4 = "https://media.githubusercontent.com/media/decentrala
 
 string[] resolutions = ["5k", "2.5k", "1.5k", "1k", "0.5k"];
 
-const int ITERATIONS = 2;
+const int ITERATIONS = 1;
 
 var timestamp = DateTime.Now.Ticks;
 using var httpClient = new HttpClient();
@@ -39,12 +39,33 @@ for (int i = 0; i < ITERATIONS; i++)
     }
 }
 
-// for (int i = 0; i < 1; i++)
-// {
-//     tasks.Add(httpClient.GetAsync(
-//         string.Format(API, Uri.EscapeDataString(string.Format(IMG_URL_JPG, 2, "5k", timestamp, i))),
-//         HttpCompletionOption.ResponseHeadersRead));
-// }
+for (int i = 0; i < 10; i++)
+{
+    tasks.Add(httpClient.GetAsync(
+        string.Format(API, Uri.EscapeDataString(string.Format(IMG_URL_WEBP_ANIM, 2, "5k", timestamp, i))),
+        HttpCompletionOption.ResponseHeadersRead));
+}
+
+for (int i = 0; i < 10; i++)
+{
+    tasks.Add(httpClient.GetAsync(
+        string.Format(API, Uri.EscapeDataString(string.Format(IMG_URL_GIF, 2, "5k", timestamp, i))),
+        HttpCompletionOption.ResponseHeadersRead));
+}
+
+for (int i = 0; i < 10; i++)
+{
+    tasks.Add(httpClient.GetAsync(
+        string.Format(API, Uri.EscapeDataString(string.Format(IMG_URL_SVG, 2, "5k", timestamp, i))),
+        HttpCompletionOption.ResponseHeadersRead));
+}
+
+for (int i = 0; i < 10; i++)
+{
+    tasks.Add(httpClient.GetAsync(
+        string.Format(API, Uri.EscapeDataString(string.Format(IMG_URL_MP4, 2, "5k", timestamp, i))),
+        HttpCompletionOption.ResponseHeadersRead));
+}
 
 
 await Task.WhenAll(tasks);

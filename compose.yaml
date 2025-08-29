@@ -12,7 +12,6 @@ services:
       context: .
       dockerfile: MetaMorphAPI/Dockerfile
     image: metamorphapi:latest
-    platform: linux/amd64
     ports:
       - "5133:8080"
       - "7053:8081"
@@ -37,7 +36,6 @@ services:
       context: .
       dockerfile: MetaMorphWorker/Dockerfile
     image: metamorphworker:latest
-    platform: linux/amd64
     depends_on:
       metamorphapi:
         condition: service_healthy

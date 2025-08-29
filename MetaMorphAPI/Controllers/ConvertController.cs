@@ -1,5 +1,8 @@
+using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Text;
+using MetaMorphAPI.Enums;
+using MetaMorphAPI.Services;
 using MetaMorphAPI.Services.Cache;
 using MetaMorphAPI.Services.Queue;
 using Microsoft.AspNetCore.Mvc;
@@ -14,6 +17,7 @@ namespace MetaMorphAPI.Controllers;
 public class ConvertController(
     ICacheService cacheService,
     IConversionQueue conversionQueue,
+    ConversionStatusService conversionStatusService,
     IConfiguration configuration,
     ILogger<ConvertController> logger) : ControllerBase
 {
@@ -21,18 +25,40 @@ public class ConvertController(
 
     [HttpGet("/convert")]
     [HttpHead("/convert")]
-    public async Task<IActionResult> Convert([FromQuery] string url)
+    public async Task<IActionResult> Convert(
+        [FromQuery, Required, Url] string url,
+        [FromQuery] ImageFormat imageFormat = ImageFormat.UASTC,
+        [FromQuery] VideoFormat videoFormat = VideoFormat.MP4,
+        [FromQuery] bool wait = false
+    )
     {
-        if (string.IsNullOrWhiteSpace(url))
-            return BadRequest("Query parameter url is required.");
-
         var hash = ComputeSha256(url);
 
-        logger.LogInformation("Conversion requested for {URL} - {Hash}.", url, hash);
+        logger.LogInformation("Conversion requested for {URL} - {Hash} ({ImageFormat} | {VideoFormat}).", url, hash, imageFormat, videoFormat);
 
-        var cacheResult = await cacheService.TryFetchURL(hash, url);
+        var cacheResult = await cacheService.TryFetchURL(hash, url, imageFormat, videoFormat);
         var cachedURL = cacheResult?.url;
         var expired = cacheResult?.expired ?? false;
+        var format = cacheResult?.format;
+
+        if (cacheResult == null || cacheResult.Value.expired)
+        {
+            logger.LogInformation("Queuing conversion for {Hash} ({ImageFormat} | {VideoFormat}", hash, imageFormat, videoFormat);
+            await conversionQueue.Enqueue(new ConversionJob(hash, url, imageFormat, videoFormat));
+
+            // If wait is requested, wait for conversion
+            if (wait)
+            {
+                logger.LogInformation("Waiting for conversion {Hash} to complete", hash);
+                cachedURL = await conversionStatusService.WaitForConversionAsync(hash, imageFormat, videoFormat);
+
+                if (string.IsNullOrEmpty(cachedURL))
+                {
+                    logger.LogWarning("Conversion wait timed out for {Hash}", hash);
+                    return Accepted();
+                }
+            }
+        }
 
         if (cachedURL != null)
         {
@@ -44,14 +70,7 @@ public class ConvertController(
                 cachedURL = builder.Uri.ToString();
             }
 
-            logger.LogInformation("Conversion exists for {Hash} (expired: {Expired}) at {URL}", hash, expired,
-                cachedURL);
-        }
-
-        if (cacheResult == null || cacheResult.Value.expired)
-        {
-            logger.LogInformation("Queuing conversion for {Hash}", hash);
-            await conversionQueue.Enqueue(new ConversionJob(hash, url));
+            logger.LogInformation("Conversion exists for {Hash} (expired: {Expired}, format:{Format}) at {URL}", hash, expired, format, cachedURL);
         }
 
         // Redirect to cached URL if it exists or to the original

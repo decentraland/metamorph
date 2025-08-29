@@ -1,3 +1,4 @@
+using MetaMorphAPI.Enums;
 using MetaMorphAPI.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -26,49 +27,56 @@ public class FileTypeTests
     [Test]
     public async Task TestGif()
     {
-        var outputPath = await _converterService.Convert(GetImagePath("test.gif"), "testhash");
+        var outputPath =
+            await _converterService.Convert(GetImagePath("test.gif"), "testhash", ImageFormat.UASTC, VideoFormat.MP4);
         Assert.That(File.Exists(outputPath.path), Is.True);
     }
 
     [Test]
     public async Task TestJpeg()
     {
-        var outputPath = await _converterService.Convert(GetImagePath("test.jpeg"), "testhash");
+        var outputPath =
+            await _converterService.Convert(GetImagePath("test.jpeg"), "testhash", ImageFormat.UASTC, VideoFormat.MP4);
         Assert.That(File.Exists(outputPath.path), Is.True);
     }
 
     [Test]
     public async Task TestJpg()
     {
-        var outputPath = await _converterService.Convert(GetImagePath("test.jpg"), "testhash");
+        var outputPath =
+            await _converterService.Convert(GetImagePath("test.jpg"), "testhash", ImageFormat.UASTC, VideoFormat.MP4);
         Assert.That(File.Exists(outputPath.path), Is.True);
     }
 
     [Test]
     public async Task TestPng()
     {
-        var outputPath = await _converterService.Convert(GetImagePath("test.png"), "testhash");
+        var outputPath =
+            await _converterService.Convert(GetImagePath("test.png"), "testhash", ImageFormat.UASTC, VideoFormat.MP4);
         Assert.That(File.Exists(outputPath.path), Is.True);
     }
 
     [Test]
     public async Task TestSvg()
     {
-        var outputPath = await _converterService.Convert(GetImagePath("test.svg"), "testhash");
+        var outputPath =
+            await _converterService.Convert(GetImagePath("test.svg"), "testhash", ImageFormat.UASTC, VideoFormat.MP4);
         Assert.That(File.Exists(outputPath.path), Is.True);
     }
 
     [Test]
     public async Task TestWebP()
     {
-        var outputPath = await _converterService.Convert(GetImagePath("test.webp"), "testhash");
+        var outputPath =
+            await _converterService.Convert(GetImagePath("test.webp"), "testhash", ImageFormat.UASTC, VideoFormat.MP4);
         Assert.That(File.Exists(outputPath.path), Is.True);
     }
 
     [Test]
     public async Task TestWebPAnimated()
     {
-        var outputPath = await _converterService.Convert(GetImagePath("test_animated.webp"), "testhash");
+        var outputPath = await _converterService.Convert(GetImagePath("test_animated.webp"), "testhash",
+            ImageFormat.UASTC, VideoFormat.MP4);
         Assert.That(File.Exists(outputPath.path), Is.True);
     }
 

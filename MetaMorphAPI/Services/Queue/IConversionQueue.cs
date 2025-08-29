@@ -1,3 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
+using MetaMorphAPI.Enums;
+
 namespace MetaMorphAPI.Services.Queue;
 
 /// <summary>
@@ -22,4 +25,7 @@ public interface IConversionQueue
 /// </summary>
 /// <param name="Hash">The hash of the URL</param>
 /// <param name="URL">The source URL</param>
-public record ConversionJob(string Hash, string URL);
+/// <param name="ImageFormat">The desired image format</param>
+/// <param name="VideoFormat">The desired video format</param>
+[SuppressMessage("ReSharper", "InconsistentNaming")]
+public record ConversionJob(string Hash, string URL, ImageFormat ImageFormat, VideoFormat VideoFormat);

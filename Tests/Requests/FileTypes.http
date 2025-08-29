@@ -18,3 +18,7 @@ GET {{HOST}}/convert?
 ### Map Image
 GET {{HOST}}/convert?url=https://media.githubusercontent.com/media/genesis-city/parcels/new-client-images/maps/lod-0/3/0%2C7.jpg
 
+
+### JPG WAIT
+GET {{HOST}}/convert?wait=true&imageFormat=astc_high&
+    url=https://media.githubusercontent.com/media/genesis-city/parcels/new-client-images/maps/lod-0/3/0%2C1.jpg
