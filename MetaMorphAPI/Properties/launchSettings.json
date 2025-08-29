@@ -11,7 +11,8 @@
         "MetaMorph__LocalCache": "true",
         "MetaMorph__LocalWorker": "true",
         "MetaMorph__StartLocalInfra": "true",
-        "AWS__S3PublicHost": ""
+        "AWS__S3PublicHost": "",
+        "SENTRY_DSN": "test"
       }
     },
     "Local AWS": {
@@ -24,7 +25,8 @@
         "MetaMorph__LocalWorker": "true",
         "MetaMorph__StartLocalInfra": "true",
         "AWS_ACCESS_KEY_ID": "test",
-        "AWS_SECRET_ACCESS_KEY": "test"
+        "AWS_SECRET_ACCESS_KEY": "test",
+        "SENTRY_DSN": "test"
       }
     }
   }
