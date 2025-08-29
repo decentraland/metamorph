@@ -3,6 +3,9 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Sentry: read from configuration & env vars SENTRY_DSN
+builder.WebHost.UseSentry();
+
 builder.Services.AddHttpClient();
 
 // Configure logging

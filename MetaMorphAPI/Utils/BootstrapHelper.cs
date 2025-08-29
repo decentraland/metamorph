@@ -74,9 +74,12 @@ public static class BootstrapHelper
 
     internal static void SetupLocalCache(this WebApplicationBuilder builder)
     {
-        var localConvertedDirectory = Path.Combine(
-            builder.Environment.WebRootPath,
-            CONVERTED_DIRECTORY_NAME);
+        var webRoot = builder.Environment.WebRootPath
+                      ?? Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
+
+        Directory.CreateDirectory(webRoot);
+
+        var localConvertedDirectory = Path.Combine(webRoot, CONVERTED_DIRECTORY_NAME);
 
         Directory.CreateDirectory(localConvertedDirectory);
 
