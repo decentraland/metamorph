@@ -13,7 +13,7 @@
         <PackageReference Include="AWSSDK.S3" Version="3.7.416.12" />
         <PackageReference Include="AWSSDK.SQS" Version="3.7.400.136" />
         <PackageReference Include="FFMpegCore" Version="5.2.0" />
-        <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.6.0" />
+        <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.8.1" />
         <PackageReference Include="Mime-Detective" Version="25.4.15" />
         <PackageReference Include="prometheus-net.AspNetCore" Version="8.2.1" />
         <PackageReference Include="Sentry.AspNetCore" Version="5.14.1" />
