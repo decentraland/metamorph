@@ -190,7 +190,7 @@ public class RemoteCacheService(
     /// </summary>
     private TimeSpan? SanitizeMaxAge(TimeSpan? maxAge)
     {
-        if (maxAge != null && maxAge < TimeSpan.FromMinutes(5))
+        if (maxAge != null && maxAge < _minMaxAge)
         {
             return _minMaxAge;
         }

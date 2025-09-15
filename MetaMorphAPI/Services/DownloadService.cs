@@ -62,6 +62,13 @@ public class DownloadService(string tempDirectory, HttpClient httpClient, long m
             ArrayPool<byte>.Shared.Return(buffer);
         }
 
-        return (tempFilePath, response.Headers.ETag?.Tag, response.Headers.CacheControl?.MaxAge);
+        var maxAge = response.Headers.CacheControl?.MaxAge;
+        if (response.Headers.CacheControl?.NoCache == true)
+        {
+            // If NoCache is specified we set maxAge to 0 and let the system down the line handle it (it will be set to the minimum maxAge specified).
+            maxAge = TimeSpan.FromMinutes(0);
+        }
+
+        return (tempFilePath, response.Headers.ETag?.Tag, maxAge);
     }
 }
