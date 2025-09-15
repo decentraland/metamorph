@@ -15,12 +15,10 @@ public class CacheRefreshBackgroundService(
             try
             {
                 logger.LogInformation("Processing expiry for {Hash}-({ImageFormat}|{VideoFormat})", item.Hash, item.ImageFormat, item.VideoFormat);
-
-                await Task.Delay(2000, ct);
                 
-                var expired = await cacheService.IsExpired(item.Hash, item.ImageFormat, item.VideoFormat, ct);
+                var valid = await cacheService.Revalidate(item.Hash, item.ImageFormat, item.VideoFormat, ct);
 
-                if (expired)
+                if (!valid)
                 {
                     await conversionQueue.Enqueue(new ConversionJob(item.Hash, item.URL, item.ImageFormat, item.VideoFormat), ct);
                 }

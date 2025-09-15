@@ -18,7 +18,7 @@ public interface ICacheService
     /// </summary>
     Task<CacheResult?> TryFetchURL(string hash, string? url, ImageFormat imageFormat, VideoFormat videoFormat);
 
-    Task<bool> IsExpired(string hash, ImageFormat imageFormat, VideoFormat videoFormat, CancellationToken ct);
+    Task<bool> Revalidate(string hash, ImageFormat imageFormat, VideoFormat videoFormat, CancellationToken ct);
 }
 
 [SuppressMessage("ReSharper", "InconsistentNaming")]

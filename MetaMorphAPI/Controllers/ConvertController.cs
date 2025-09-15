@@ -18,11 +18,8 @@ public class ConvertController(
     ICacheService cacheService,
     IConversionQueue conversionQueue,
     ConversionStatusService conversionStatusService,
-    IConfiguration configuration,
     ILogger<ConvertController> logger) : ControllerBase
 {
-    private readonly string? _s3HostOverride = configuration["AWS:S3PublicHost"];
-
     [HttpGet("/convert")]
     [HttpHead("/convert")]
     public async Task<IActionResult> Convert(
@@ -32,7 +29,7 @@ public class ConvertController(
         [FromQuery] bool wait = false
     )
     {
-        var hash = ComputeSha256(url);
+        var hash = ComputeHash(url);
 
         logger.LogInformation("Conversion requested for {URL} - {Hash} ({ImageFormat} | {VideoFormat}).", url, hash, imageFormat, videoFormat);
 
@@ -57,28 +54,18 @@ public class ConvertController(
             }
         }
 
-        if (cacheResult is { } result)
+        if (cacheResult.HasValue)
         {
-            var cachedURL = result.URL;
-            
-            // Override S3 host for external redirects, if specified
-            if (!string.IsNullOrWhiteSpace(_s3HostOverride))
-            {
-                var uri = new Uri(result.URL);
-                var builder = new UriBuilder(uri) { Host = _s3HostOverride };
-                cachedURL = builder.Uri.ToString();
-            }
-
             logger.LogInformation("Conversion exists for {Hash}: {CacheResult}", hash, cacheResult.Value);
-            
-            return Redirect(cachedURL);
+            return Redirect(cacheResult.Value.URL);
         }
 
         // Redirect to original
+        logger.LogInformation("No conversion for {Hash}, redirecting to original URL", hash);
         return Redirect(url);
     }
 
-    private static string ComputeSha256(string input)
+    public static string ComputeHash(string input)
     {
         var bytes = Encoding.UTF8.GetBytes(input);
         var hash = SHA256.HashData(bytes);

@@ -1,5 +1,4 @@
 using System.Net;
-using Amazon.S3;
 using Amazon.S3.Transfer;
 using MetaMorphAPI.Enums;
 using StackExchange.Redis;
@@ -11,9 +10,10 @@ namespace MetaMorphAPI.Services.Cache;
 /// Production cache service that stores files in S3 and uses Redis to cache the S3 URL.
 /// </summary>
 public class RemoteCacheService(
-    IAmazonS3? s3Client,
-    string? bucketName,
-    ConnectionMultiplexer redis,
+    ITransferUtility? s3,
+    string? s3Bucket,
+    string? s3Endpoint,
+    IDatabase redis,
     HttpClient httpClient,
     CacheRefreshQueue cacheRefreshQueue,
     ILogger<RemoteCacheService> logger,
@@ -21,8 +21,6 @@ public class RemoteCacheService(
     : ICacheService
 {
     private readonly TimeSpan _minMaxAge = TimeSpan.FromMinutes(minMaxAgeMinutes);
-    private readonly IDatabase _redisDb = redis.GetDatabase();
-    private readonly TransferUtility _transferUtility = new(s3Client);
 
     /// <summary>
     /// Uploads the converted file to S3 and stores the S3 URL in Redis under the provided hash.
@@ -30,9 +28,9 @@ public class RemoteCacheService(
     public async Task Store(string hash, string format, MediaType mediaType, string? eTag, TimeSpan? maxAge,
         string sourcePath)
     {
-        if (bucketName == null || s3Client == null)
+        if (s3Bucket == null || s3 == null || s3Endpoint == null)
         {
-            throw new InvalidOperationException("Bucket name not configured");
+            throw new InvalidOperationException("S3 has not been configured, you can't use Store(...)");
         }
 
         var extension = Path.GetExtension(sourcePath).ToLowerInvariant();
@@ -51,12 +49,12 @@ public class RemoteCacheService(
             var uploadRequest = new TransferUtilityUploadRequest
             {
                 FilePath = sourcePath,
-                BucketName = bucketName,
+                BucketName = s3Bucket,
                 Key = s3Key,
                 ContentType = contentType
             };
 
-            await _transferUtility.UploadAsync(uploadRequest);
+            await s3.UploadAsync(uploadRequest);
         }
         catch (Exception ex)
         {
@@ -65,12 +63,7 @@ public class RemoteCacheService(
         }
 
         // Construct the S3 URL
-        var endpoint = s3Client.DetermineServiceOperationEndpoint(new Amazon.S3.Model.GetObjectRequest
-        {
-            BucketName = bucketName,
-            Key = s3Key
-        });
-        var s3Url = $"{endpoint.URL}{s3Key}";
+        var s3Url = s3Endpoint + s3Key;
 
         // Sanitize max age
         maxAge = SanitizeMaxAge(maxAge);
@@ -96,13 +89,13 @@ public class RemoteCacheService(
             keys.Add(new RedisKVP(RedisKeys.GetValidKey(hash, format), "1"));
         }
 
-        await _redisDb.StringSetAsync(keys.ToArray());
+        await redis.StringSetAsync(keys.ToArray());
 
         if (maxAge != null)
         {
             // Store the max age in Redis as the TTL of the valid:{hash} key
             // Needs to be sent separately so we can set the TTL
-            await _redisDb.StringSetAsync(RedisKeys.GetValidKey(hash, format), "1", maxAge.Value, When.Always);
+            await redis.StringSetAsync(RedisKeys.GetValidKey(hash, format), "1", maxAge.Value, When.Always);
         }
     }
 
@@ -128,40 +121,44 @@ public class RemoteCacheService(
         return cacheResult;
     }
 
-    public async Task<bool> IsExpired(string hash, ImageFormat imageFormat, VideoFormat videoFormat, CancellationToken ct)
+    /// <summary>
+    /// Checks if the conversion is expired. If it is and an ETag exists, it checks if a new conversion is needed.
+    /// </summary>
+    /// <returns>True if the conversion is still valid, false otherwise.</returns>
+    public async Task<bool> Revalidate(string hash, ImageFormat imageFormat, VideoFormat videoFormat, CancellationToken ct)
     {
         if (await GetCacheData(hash, imageFormat, videoFormat) is { } result)
         {
-            if (result.ETag != null)
+            if (!result.Expired) return true;
+            if (result.ETag == null) return false;
+            
+            var request = new HttpRequestMessage(HttpMethod.Head, result.URL);
+            request.Headers.IfNoneMatch.ParseAdd(result.ETag);
+
+            using var response = await httpClient.SendAsync(request, ct)
+                .ConfigureAwait(false);
+
+            if (response.StatusCode == HttpStatusCode.NotModified)
             {
-                var request = new HttpRequestMessage(HttpMethod.Head, result.URL);
-                request.Headers.IfNoneMatch.ParseAdd(result.ETag);
+                var maxAge = SanitizeMaxAge(response.Headers.CacheControl?.MaxAge);
 
-                using var response = await httpClient.SendAsync(request, ct)
-                    .ConfigureAwait(false);
+                logger.LogInformation("Source not modified for {Hash}, resetting TTL to {MaxAge}", hash, maxAge?.ToString());
+                await redis.StringSetAsync(RedisKeys.GetValidKey(hash, result.Format), "1", maxAge, When.Always);
 
-                if (response.StatusCode == HttpStatusCode.NotModified)
-                {
-                    var maxAge = SanitizeMaxAge(response.Headers.CacheControl?.MaxAge);
-
-                    logger.LogInformation("Source not modified for {Hash}, resetting TTL to {MaxAge}", hash, maxAge?.ToString());
-                    await _redisDb.StringSetAsync(RedisKeys.GetValidKey(hash, result.Format), "1", maxAge, When.Always);
-
-                    return false;
-                }
+                return true;
             }
 
-            return true;
+            return false;
         }
         
         logger.LogError("Invalid expiry for {Hash}", hash);
         // If this were to happen we say that the hash is not expired
-        return true;
+        return false;
     }
 
     private async Task<CacheResult?> GetCacheData(string hash, ImageFormat imageFormat, VideoFormat videoFormat)
     {
-        var storedFileType = await _redisDb.StringGetAsync(RedisKeys.GetFileTypeKey(hash));
+        var storedFileType = await redis.StringGetAsync(RedisKeys.GetFileTypeKey(hash));
 
         if (storedFileType.IsNullOrEmpty || !Enum.TryParse(storedFileType.ToString(), out MediaType fileType))
         {
@@ -170,7 +167,7 @@ public class RemoteCacheService(
 
         var format = RedisKeys.GetFormatString(fileType, imageFormat, videoFormat);
 
-        var results = await _redisDb.StringGetAsync(
+        var results = await redis.StringGetAsync(
             [
                 RedisKeys.GetURLKey(hash, format),
                 RedisKeys.GetETagKey(hash, format),

@@ -12,18 +12,17 @@ namespace MetaMorphAPI.Services.Queue;
 public class RemoteConversionQueue(
     IAmazonSQS sqsClient,
     string queueName,
-    ConnectionMultiplexer redis,
+    IDatabase redis,
     ILogger<RemoteConversionQueue> logger) : IConversionQueue
 {
     private readonly TimeSpan _conversionExpiry = TimeSpan.FromMinutes(10);
-    private readonly IDatabase _redisDb = redis.GetDatabase();
 
     private readonly Lazy<Task<string>> _queueUrlLazy =
         new(async () => (await sqsClient.GetQueueUrlAsync(queueName)).QueueUrl);
 
     public async Task Enqueue(ConversionJob job, CancellationToken ct = default)
     {
-        if (!await _redisDb.StringSetAsync(RedisKeys.GetConvertingKey(job.Hash, job.ImageFormat, job.VideoFormat), "1", _conversionExpiry, When.NotExists))
+        if (!await redis.StringSetAsync(RedisKeys.GetConvertingKey(job.Hash, job.ImageFormat, job.VideoFormat), "1", _conversionExpiry, When.NotExists))
         {
             // Already queued
             logger.LogInformation("Conversion already enqueued, skipping: {Hash}", job.Hash);

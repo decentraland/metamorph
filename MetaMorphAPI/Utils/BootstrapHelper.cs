@@ -1,4 +1,7 @@
+using Amazon.Extensions.NETCore.Setup;
 using Amazon.S3;
+using Amazon.S3.Model;
+using Amazon.S3.Transfer;
 using Amazon.SQS;
 using MetaMorphAPI.Services;
 using MetaMorphAPI.Services.Cache;
@@ -112,8 +115,7 @@ public static class BootstrapHelper
         var redisConnectionString = builder.GetRequiredConfig<string>("Redis:ConnectionString");
 
         // Redis
-        builder.Services.AddSingleton<ConnectionMultiplexer>(_ =>
-            ConnectionMultiplexer.Connect(redisConnectionString));
+        builder.Services.AddSingleton<IDatabase>(_ => ConnectionMultiplexer.Connect(redisConnectionString).GetDatabase());
 
         // SQS
         builder.Services.AddAWSService<IAmazonSQS>();
@@ -121,13 +123,13 @@ public static class BootstrapHelper
             new RemoteConversionQueue(
                 sp.GetRequiredService<IAmazonSQS>(),
                 sqsQueueName,
-                sp.GetRequiredService<ConnectionMultiplexer>(),
+                sp.GetRequiredService<IDatabase>(),
                 sp.GetRequiredService<ILogger<RemoteConversionQueue>>()));
 
         // S3
         if (setupS3)
         {
-            builder.Services.AddAWSService<IAmazonS3>(builder.Configuration.GetAWSOptions<AmazonS3Config>());
+            builder.Services.AddAWSService<IAmazonS3>(builder.Configuration.GetAWSOptions());
         }
 
         // Cache refresh
@@ -136,15 +138,22 @@ public static class BootstrapHelper
 
         // Register the RemoteCacheService
         builder.Services.AddSingleton<ICacheService>(sp =>
-            new RemoteCacheService(
-                setupS3 ? sp.GetRequiredService<IAmazonS3>() : null,
-                setupS3 ? builder.GetRequiredConfig<string>("AWS:S3BucketName") : null,
-                sp.GetRequiredService<ConnectionMultiplexer>(),
+        {
+            var s3TransferUtility = setupS3 ? new TransferUtility(sp.GetRequiredService<IAmazonS3>()) : null;
+            var s3BucketName = setupS3 ? builder.GetRequiredConfig<string>("AWS:S3BucketName") : null;
+            var s3Endpoint = setupS3 ? sp.GetRequiredService<IAmazonS3>().DetermineServiceOperationEndpoint(new GetObjectRequest { BucketName = s3BucketName }).URL : null;
+
+            return new RemoteCacheService(
+                s3TransferUtility,
+                s3BucketName,
+                s3Endpoint,
+                sp.GetRequiredService<IDatabase>(),
                 sp.GetRequiredService<HttpClient>(),
                 sp.GetRequiredService<CacheRefreshQueue>(),
                 sp.GetRequiredService<ILogger<RemoteCacheService>>(),
                 builder.GetRequiredConfig<int>("MetaMorph:MinMaxAgeMinutes")
-            ));
+            );
+        });
     }
 
     public static void SetupStaticFiles(this WebApplication app)
