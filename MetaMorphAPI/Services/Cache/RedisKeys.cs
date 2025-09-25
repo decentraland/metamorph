@@ -5,11 +5,13 @@ namespace MetaMorphAPI.Services.Cache;
 
 public static class RedisKeys
 {
-    public static RedisKey GetFileTypeKey(string hash) => new($"filetype:{hash}");
-    public static RedisKey GetURLKey(string hash, string format) => new($"{hash}_{format}");
-    public static RedisKey GetConvertingKey(string hash, ImageFormat imageFormat, VideoFormat videoFormat) => new($"converting:{hash}-{imageFormat}-{videoFormat}");
-    public static RedisKey GetETagKey(string hash, string format) => new($"etag:{hash}_{format}");
-    public static RedisKey GetValidKey(string hash, string format) => new($"valid:{hash}_{format}");
+    private const int VERSION = 1;
+    
+    public static RedisKey GetFileTypeKey(string hash) => new($"filetype:{hash}_{VERSION}");
+    public static RedisKey GetURLKey(string hash, string format) => new($"{hash}_{format}_{VERSION}");
+    public static RedisKey GetConvertingKey(string hash, ImageFormat imageFormat, VideoFormat videoFormat) => new($"converting:{hash}-{imageFormat}-{videoFormat}_{VERSION}");
+    public static RedisKey GetETagKey(string hash, string format) => new($"etag:{hash}_{format}_{VERSION}");
+    public static RedisKey GetValidKey(string hash, string format) => new($"valid:{hash}_{format}_{VERSION}");
 
     public static string GetFormatString(MediaType mediaType, ImageFormat imageFormat, VideoFormat videoFormat) =>
         mediaType switch
