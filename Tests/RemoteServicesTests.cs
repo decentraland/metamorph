@@ -167,7 +167,7 @@ public class RemoteCacheServiceTests
             });
 
         // Act
-        var result = await _service.Revalidate(HASH, URL, ImageFormat.UASTC, VideoFormat.MP4, CancellationToken.None);
+        var result = await _service.Revalidate(HASH, URL, ImageFormat.UASTC, VideoFormat.MP4, false, CancellationToken.None);
 
         // Assert
         Assert.That(result, Is.True);

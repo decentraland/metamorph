@@ -18,7 +18,7 @@ public interface ICacheService
     /// </summary>
     Task<CacheResult?> TryFetchURL(string hash, string? url, ImageFormat imageFormat, VideoFormat videoFormat, bool forceRefresh);
 
-    Task<bool> Revalidate(string hash, string url, ImageFormat imageFormat, VideoFormat videoFormat, CancellationToken ct);
+    Task<bool> Revalidate(string hash, string url, ImageFormat imageFormat, VideoFormat videoFormat, bool forceRefresh, CancellationToken ct);
 }
 
 [SuppressMessage("ReSharper", "InconsistentNaming")]

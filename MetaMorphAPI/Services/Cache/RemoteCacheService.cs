@@ -115,7 +115,7 @@ public class RemoteCacheService(
         if ((cacheResult.Value is { Expired: true, Converting: false } || forceRefresh) && url != null)
         {
             logger.LogInformation("Cache is expired ({Expired}) or refresh forced ({ForceRefresh}) for {Hash}", cacheResult.Value.Expired, forceRefresh, hash);
-            await cacheRefreshQueue.EnqueueAsync(new CacheRefreshRequest(hash, url, imageFormat, videoFormat, false));
+            await cacheRefreshQueue.EnqueueAsync(new CacheRefreshRequest(hash, url, imageFormat, videoFormat, forceRefresh));
         }
 
         return cacheResult;
@@ -125,15 +125,17 @@ public class RemoteCacheService(
     /// Checks if the conversion is expired. If it is and an ETag exists, it checks if a new conversion is needed.
     /// </summary>
     /// <returns>True if the conversion is still valid, false otherwise.</returns>
-    public async Task<bool> Revalidate(string hash, string url, ImageFormat imageFormat, VideoFormat videoFormat, CancellationToken ct)
+    public async Task<bool> Revalidate(string hash, string url, ImageFormat imageFormat, VideoFormat videoFormat, bool forceRefresh, CancellationToken ct)
     {
         if (await GetCacheData(hash, imageFormat, videoFormat) is { } result)
         {
-            if (!result.Expired) return true;
-            if (result.ETag == null) return false;
+            if (!forceRefresh && !result.Expired) return true;
 
             var request = new HttpRequestMessage(HttpMethod.Head, url);
-            request.Headers.IfNoneMatch.ParseAdd(result.ETag);
+            if (result.ETag != null)
+            {
+                request.Headers.IfNoneMatch.ParseAdd(result.ETag);
+            }
 
             using var response = await httpClient.SendAsync(request, ct)
                .ConfigureAwait(false);
