@@ -53,7 +53,7 @@ public class RemoteConversionQueue(
 
             var response = await sqsClient.ReceiveMessageAsync(request, ct);
 
-            if (response.Messages.Count > 0)
+            if (response.Messages?.Count > 0)
             {
                 var message = response.Messages[0];
                 var job = JsonSerializer.Deserialize<ConversionJob>(message.Body);

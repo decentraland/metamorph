@@ -30,6 +30,7 @@
     <ItemGroup>
       <Folder Include="temp\" />
       <Folder Include="wwwroot\" />
+      <Folder Include="wwwroot\converted\" />
     </ItemGroup>
 
     <ItemGroup>

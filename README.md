@@ -38,6 +38,8 @@ GET /convert?url=<media_url>&imageFormat=<format>&videoFormat=<format>&wait=<boo
 - **wait** (optional): If `true`, holds the request until conversion completes (max 20 seconds)
   - On success: redirects to the converted file
   - On timeout: responds with `202 Accepted`
+- **forceRefresh** (optional): If `true` a new conversion will be scheduled, even if a valid cached version already exists.
+  - Note that the cached version will still be returned if it exists.
 
 Specifying both `videoFormat` and `imageFormat` is valid and the converter will use the appropriate one when it determines if the url contains a video or an image file.
 

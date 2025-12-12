@@ -7,5 +7,5 @@ namespace MetaMorphAPI.Enums;
 public enum VideoFormat
 {
     MP4,
-    OGV
+    OGV,
 }

@@ -52,7 +52,7 @@ public class ConversionStatusService(
             try
             {
                 // Check cache for completion
-                if (await cacheService.TryFetchURL(key.Hash, null, key.ImageFormat, key.VideoFormat) is { } result)
+                if (await cacheService.TryFetchURL(key.Hash, null, key.ImageFormat, key.VideoFormat, false) is { } result)
                 {
                     logger.LogDebug("Conversion found in cache for {Hash}", key.Hash);
                     return result;

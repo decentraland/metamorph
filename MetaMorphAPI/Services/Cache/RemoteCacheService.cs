@@ -26,7 +26,7 @@ public class RemoteCacheService(
     /// Uploads the converted file to S3 and stores the S3 URL in Redis under the provided hash.
     /// </summary>
     public async Task Store(string hash, string format, MediaType mediaType, string? eTag, TimeSpan? maxAge,
-        string sourcePath)
+                            string sourcePath)
     {
         if (s3Bucket == null || s3 == null || s3Endpoint == null)
         {
@@ -37,9 +37,9 @@ public class RemoteCacheService(
         var contentType = extension switch
         {
             ".ktx2" => "image/ktx2",
-            ".mp4" => "video/mp4",
-            ".ogv" => "video/ogg",
-            _ => throw new InvalidOperationException($"Unrecognized file extension {extension}")
+            ".mp4"  => "video/mp4",
+            ".ogv"  => "video/ogg",
+            _       => throw new InvalidOperationException($"Unrecognized file extension {extension}")
         };
         var s3Key = $"{DateTime.Now:yyyyMMdd-HHmmss}-{hash}-{format}{extension}";
 
@@ -66,7 +66,7 @@ public class RemoteCacheService(
         var s3Url = s3Endpoint + s3Key;
 
         // Sanitize max age
-        maxAge = SanitizeMaxAge(maxAge);
+        maxAge = SanitizeMaxAge(maxAge, eTag);
 
         // Store the hash to S3 URL mapping in Redis
         logger.LogInformation("Sending to redis: {Key}:{S3Url}, etag:{ETag}, maxAge:{MaxAge}", hash, s3Url, eTag,
@@ -103,19 +103,19 @@ public class RemoteCacheService(
     /// Retrieves the S3 URL for the converted file from Redis using the hash.
     /// </summary>
     public async Task<CacheResult?> TryFetchURL(string hash, string? url,
-        ImageFormat imageFormat, VideoFormat videoFormat)
+                                                ImageFormat imageFormat, VideoFormat videoFormat, bool forceRefresh)
     {
         var cacheResult = await GetCacheData(hash, imageFormat, videoFormat);
-        
+
         if (cacheResult == null)
         {
             return null;
         }
 
-        if (cacheResult.Value is { Expired: true, Converting: false } && url != null)
+        if ((cacheResult.Value is { Expired: true, Converting: false } || forceRefresh) && url != null)
         {
-            logger.LogInformation("Cache is expired for {Hash}", hash);
-            await cacheRefreshQueue.EnqueueAsync(new CacheRefreshRequest(hash, url, imageFormat, videoFormat));
+            logger.LogInformation("Cache is expired ({Expired}) or refresh forced ({ForceRefresh}) for {Hash}", cacheResult.Value.Expired, forceRefresh, hash);
+            await cacheRefreshQueue.EnqueueAsync(new CacheRefreshRequest(hash, url, imageFormat, videoFormat, false));
         }
 
         return cacheResult;
@@ -125,22 +125,22 @@ public class RemoteCacheService(
     /// Checks if the conversion is expired. If it is and an ETag exists, it checks if a new conversion is needed.
     /// </summary>
     /// <returns>True if the conversion is still valid, false otherwise.</returns>
-    public async Task<bool> Revalidate(string hash, ImageFormat imageFormat, VideoFormat videoFormat, CancellationToken ct)
+    public async Task<bool> Revalidate(string hash, string url, ImageFormat imageFormat, VideoFormat videoFormat, CancellationToken ct)
     {
         if (await GetCacheData(hash, imageFormat, videoFormat) is { } result)
         {
             if (!result.Expired) return true;
             if (result.ETag == null) return false;
-            
-            var request = new HttpRequestMessage(HttpMethod.Head, result.URL);
+
+            var request = new HttpRequestMessage(HttpMethod.Head, url);
             request.Headers.IfNoneMatch.ParseAdd(result.ETag);
 
             using var response = await httpClient.SendAsync(request, ct)
-                .ConfigureAwait(false);
+               .ConfigureAwait(false);
 
             if (response.StatusCode == HttpStatusCode.NotModified)
             {
-                var maxAge = SanitizeMaxAge(response.Headers.CacheControl?.MaxAge);
+                var maxAge = SanitizeMaxAge(response.Headers.CacheControl?.MaxAge, result.ETag);
 
                 logger.LogInformation("Source not modified for {Hash}, resetting TTL to {MaxAge}", hash, maxAge?.ToString());
                 await redis.StringSetAsync(RedisKeys.GetValidKey(hash, result.Format), "1", maxAge, When.Always);
@@ -150,7 +150,7 @@ public class RemoteCacheService(
 
             return false;
         }
-        
+
         logger.LogError("Invalid expiry for {Hash}", hash);
         // If this were to happen we say that the hash is not expired
         return false;
@@ -188,9 +188,15 @@ public class RemoteCacheService(
     /// If the max age is less than 5 minutes, we set it to 5 minutes. If there is no max age,
     /// we keep it and that url will be cached indefinitely.
     /// </summary>
-    private TimeSpan? SanitizeMaxAge(TimeSpan? maxAge)
+    private TimeSpan? SanitizeMaxAge(TimeSpan? maxAge, string? etag)
     {
         if (maxAge != null && maxAge < _minMaxAge)
+        {
+            return _minMaxAge;
+        }
+
+        // If there's no max age but there is an etag, we set it to the minimum max age since we can revalidate
+        if (maxAge == null && etag != null)
         {
             return _minMaxAge;
         }

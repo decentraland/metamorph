@@ -16,7 +16,7 @@ public class CacheRefreshBackgroundService(
             {
                 logger.LogInformation("Processing expiry for {Hash}-({ImageFormat}|{VideoFormat})", item.Hash, item.ImageFormat, item.VideoFormat);
                 
-                var valid = await cacheService.Revalidate(item.Hash, item.ImageFormat, item.VideoFormat, ct);
+                var valid = await cacheService.Revalidate(item.Hash, item.URL, item.ImageFormat, item.VideoFormat, ct);
 
                 if (!valid)
                 {
@@ -29,6 +29,4 @@ public class CacheRefreshBackgroundService(
             }
         }
     }
-
-
 }

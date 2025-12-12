@@ -22,7 +22,7 @@ public class LocalCacheService(string storagePath, ILogger<LocalCacheService> lo
     }
 
     public Task<CacheResult?> TryFetchURL(string hash, string? url,
-        ImageFormat imageFormat, VideoFormat videoFormat)
+                                          ImageFormat imageFormat, VideoFormat videoFormat, bool forceRefresh)
     {
         foreach (var format in Enum.GetNames<ImageFormat>().Concat(Enum.GetNames<VideoFormat>()))
         {
@@ -36,7 +36,7 @@ public class LocalCacheService(string storagePath, ILogger<LocalCacheService> lo
         return Task.FromResult<CacheResult?>(null);
     }
 
-    public Task<bool> Revalidate(string hash, ImageFormat imageFormat, VideoFormat videoFormat, CancellationToken ct)
+    public Task<bool> Revalidate(string hash, string url, ImageFormat imageFormat, VideoFormat videoFormat, CancellationToken ct)
     {
         return Task.FromResult(false);
     }

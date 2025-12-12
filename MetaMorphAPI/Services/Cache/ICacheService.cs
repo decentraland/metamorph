@@ -16,9 +16,9 @@ public interface ICacheService
     /// <summary>
     /// Gets the URL of the cached file. If the file isn't cached it returns null.
     /// </summary>
-    Task<CacheResult?> TryFetchURL(string hash, string? url, ImageFormat imageFormat, VideoFormat videoFormat);
+    Task<CacheResult?> TryFetchURL(string hash, string? url, ImageFormat imageFormat, VideoFormat videoFormat, bool forceRefresh);
 
-    Task<bool> Revalidate(string hash, ImageFormat imageFormat, VideoFormat videoFormat, CancellationToken ct);
+    Task<bool> Revalidate(string hash, string url, ImageFormat imageFormat, VideoFormat videoFormat, CancellationToken ct);
 }
 
 [SuppressMessage("ReSharper", "InconsistentNaming")]

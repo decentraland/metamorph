@@ -46,7 +46,7 @@ public class ConvertControllerTests
         var cacheResult = new CacheResult(EXPECTED_CONVERTED_URL, "etag123", false, false, "ktx2");
 
         _mockCacheService
-            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4))
+            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4, false))
             .ReturnsAsync(cacheResult);
 
         // Act
@@ -57,7 +57,7 @@ public class ConvertControllerTests
         Assert.That(redirectResult, Is.Not.Null);
         Assert.That(redirectResult!.Url, Is.EqualTo(EXPECTED_CONVERTED_URL));
 
-        _mockCacheService.Verify(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4), Times.Once);
+        _mockCacheService.Verify(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4, false), Times.Once);
         _mockConversionQueue.Verify(cq => cq.Enqueue(It.IsAny<ConversionJob>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -70,7 +70,7 @@ public class ConvertControllerTests
         const VideoFormat VIDEO_FORMAT = VideoFormat.OGV;
 
         _mockCacheService
-            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, IMAGE_FORMAT, VIDEO_FORMAT))
+            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, IMAGE_FORMAT, VIDEO_FORMAT, false))
             .ReturnsAsync((CacheResult?)null);
 
         // Act
@@ -99,12 +99,12 @@ public class ConvertControllerTests
 
         // Initial cache miss
         _mockCacheService
-            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4))
+            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4, false))
             .ReturnsAsync((CacheResult?)null);
 
         // During polling, ConversionStatusService calls with hash and null URL - return the result immediately
         _mockCacheService
-            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), null, ImageFormat.UASTC, VideoFormat.MP4))
+            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), null, ImageFormat.UASTC, VideoFormat.MP4, false))
             .ReturnsAsync(cacheResult);
 
         // Act
@@ -126,7 +126,7 @@ public class ConvertControllerTests
 
         // Always return null to simulate timeout (no conversion found)
         _mockCacheService
-            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4))
+            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4, false))
             .ReturnsAsync((CacheResult?)null);
 
         // Act
@@ -148,14 +148,14 @@ public class ConvertControllerTests
         const VideoFormat VIDEO_FORMAT = VideoFormat.OGV;
 
         _mockCacheService
-            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, IMAGE_FORMAT, VIDEO_FORMAT))
+            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, IMAGE_FORMAT, VIDEO_FORMAT, false))
             .ReturnsAsync((CacheResult?)null);
 
         // Act
         await _controller.Convert(URL, IMAGE_FORMAT, VIDEO_FORMAT);
 
         // Assert
-        _mockCacheService.Verify(cs => cs.TryFetchURL(It.IsAny<string>(), URL, IMAGE_FORMAT, VIDEO_FORMAT), Times.Once);
+        _mockCacheService.Verify(cs => cs.TryFetchURL(It.IsAny<string>(), URL, IMAGE_FORMAT, VIDEO_FORMAT, false), Times.Once);
         _mockConversionQueue.Verify(cq => cq.Enqueue(
             It.Is<ConversionJob>(job => 
                 job.ImageFormat == IMAGE_FORMAT && 
@@ -171,7 +171,7 @@ public class ConvertControllerTests
         ConversionJob? capturedJob = null;
 
         _mockCacheService
-            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4))
+            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4, false))
             .ReturnsAsync((CacheResult?)null);
 
         _mockConversionQueue
@@ -194,7 +194,7 @@ public class ConvertControllerTests
         // Arrange
         const string URL = "https://example.com/image.jpg";
         _mockCacheService
-            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4))
+            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4, false))
             .ReturnsAsync((CacheResult?)null);
 
         // Act
@@ -220,7 +220,7 @@ public class ConvertControllerTests
         var cacheResult = new CacheResult(CONVERTED_URL, "etag", false, false, "ktx2");
 
         _mockCacheService
-            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4))
+            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4, false))
             .ReturnsAsync(cacheResult);
 
         // Act
@@ -244,7 +244,7 @@ public class ConvertControllerTests
         const string URL = "https://example.com/slow-conversion.jpg";
 
         _mockCacheService
-            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4))
+            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4, false))
             .ReturnsAsync((CacheResult?)null);
 
         // Act
@@ -259,6 +259,71 @@ public class ConvertControllerTests
                 It.IsAny<Exception?>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
+    }
+
+    [Test]
+    public async Task Convert_WithForceRefreshTrue_PassesForceRefreshToCache()
+    {
+        // Arrange
+        const string URL = "https://example.com/image.jpg";
+        const string CONVERTED_URL = "https://s3.amazonaws.com/bucket/file.ktx2";
+        var cacheResult = new CacheResult(CONVERTED_URL, "etag", false, false, "ktx2");
+
+        _mockCacheService
+            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4, true))
+            .ReturnsAsync(cacheResult);
+
+        // Act
+        var result = await _controller.Convert(URL, forceRefresh: true);
+
+        // Assert
+        var redirectResult = result as RedirectResult;
+        Assert.That(redirectResult, Is.Not.Null);
+        Assert.That(redirectResult!.Url, Is.EqualTo(CONVERTED_URL));
+
+        _mockCacheService.Verify(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4, true), Times.Once);
+    }
+
+    [Test]
+    public async Task Convert_WithForceRefreshFalse_PassesForceRefreshFalseToCache()
+    {
+        // Arrange
+        const string URL = "https://example.com/image.jpg";
+
+        _mockCacheService
+            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4, false))
+            .ReturnsAsync((CacheResult?)null);
+
+        // Act
+        await _controller.Convert(URL, forceRefresh: false);
+
+        // Assert
+        _mockCacheService.Verify(cs => cs.TryFetchURL(It.IsAny<string>(), URL, ImageFormat.UASTC, VideoFormat.MP4, false), Times.Once);
+    }
+
+    [Test]
+    public async Task Convert_WithForceRefreshAndCustomFormats_PassesAllParametersCorrectly()
+    {
+        // Arrange
+        const string URL = "https://example.com/image.jpg";
+        const ImageFormat IMAGE_FORMAT = ImageFormat.ASTC_HIGH;
+        const VideoFormat VIDEO_FORMAT = VideoFormat.OGV;
+        const string CONVERTED_URL = "https://s3.amazonaws.com/bucket/file.ktx2";
+        var cacheResult = new CacheResult(CONVERTED_URL, "etag", false, false, "ASTC_HIGH");
+
+        _mockCacheService
+            .Setup(cs => cs.TryFetchURL(It.IsAny<string>(), URL, IMAGE_FORMAT, VIDEO_FORMAT, true))
+            .ReturnsAsync(cacheResult);
+
+        // Act
+        var result = await _controller.Convert(URL, IMAGE_FORMAT, VIDEO_FORMAT, forceRefresh: true);
+
+        // Assert
+        var redirectResult = result as RedirectResult;
+        Assert.That(redirectResult, Is.Not.Null);
+        Assert.That(redirectResult!.Url, Is.EqualTo(CONVERTED_URL));
+
+        _mockCacheService.Verify(cs => cs.TryFetchURL(It.IsAny<string>(), URL, IMAGE_FORMAT, VIDEO_FORMAT, true), Times.Once);
     }
 
 }

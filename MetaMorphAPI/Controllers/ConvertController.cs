@@ -26,14 +26,15 @@ public class ConvertController(
         [FromQuery, Required, Url] string url,
         [FromQuery] ImageFormat imageFormat = ImageFormat.UASTC,
         [FromQuery] VideoFormat videoFormat = VideoFormat.MP4,
-        [FromQuery] bool wait = false
+        [FromQuery] bool wait = false,
+        [FromQuery] bool forceRefresh = false
     )
     {
         var hash = ComputeHash(url);
 
         logger.LogInformation("Conversion requested for {URL} - {Hash} ({ImageFormat} | {VideoFormat}).", url, hash, imageFormat, videoFormat);
 
-        var cacheResult = await cacheService.TryFetchURL(hash, url, imageFormat, videoFormat);
+        var cacheResult = await cacheService.TryFetchURL(hash, url, imageFormat, videoFormat, forceRefresh);
 
         if (cacheResult == null)
         {

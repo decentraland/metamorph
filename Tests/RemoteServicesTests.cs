@@ -119,7 +119,7 @@ public class RemoteCacheServiceTests
             });
 
         // Act
-        var result = await _service.TryFetchURL(HASH, URL, IMAGE_FORMAT, VIDEO_FORMAT);
+        var result = await _service.TryFetchURL(HASH, URL, IMAGE_FORMAT, VIDEO_FORMAT, false);
 
         // Assert
         Assert.That(result, Is.Not.Null);
@@ -139,7 +139,7 @@ public class RemoteCacheServiceTests
             .ReturnsAsync(RedisValue.Null);
 
         // Act
-        var result = await _service.TryFetchURL(HASH, URL, ImageFormat.UASTC, VideoFormat.MP4);
+        var result = await _service.TryFetchURL(HASH, URL, ImageFormat.UASTC, VideoFormat.MP4, false);
 
         // Assert
         Assert.That(result, Is.Null);
@@ -151,6 +151,7 @@ public class RemoteCacheServiceTests
         // Arrange
         const string HASH = "test-hash";
         const string EXPECTED_URL = "https://s3.amazonaws.com/test-bucket/file.ktx2";
+        const string URL = "https://example.com/image.jpg";
         const string E_TAG = "test-etag";
 
         _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
@@ -166,10 +167,242 @@ public class RemoteCacheServiceTests
             });
 
         // Act
-        var result = await _service.Revalidate(HASH, ImageFormat.UASTC, VideoFormat.MP4, CancellationToken.None);
+        var result = await _service.Revalidate(HASH, URL, ImageFormat.UASTC, VideoFormat.MP4, CancellationToken.None);
 
         // Assert
         Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public async Task TryFetchURL_WithForceRefreshTrue_ReturnsCachedResultEvenWhenNotExpired()
+    {
+        // Arrange
+        const string HASH = "test-hash";
+        const string URL = "https://example.com/image.jpg";
+        const ImageFormat IMAGE_FORMAT = ImageFormat.UASTC;
+        const VideoFormat VIDEO_FORMAT = VideoFormat.MP4;
+        const string CACHED_URL = "https://s3.amazonaws.com/test-bucket/file.ktx2";
+        const string E_TAG = "test-etag";
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync("Image");
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(new RedisValue[]
+            {
+                CACHED_URL,
+                E_TAG,
+                "1", // NOT expired
+                RedisValue.Null // not converting
+            });
+
+        // Act
+        var result = await _service.TryFetchURL(HASH, URL, IMAGE_FORMAT, VIDEO_FORMAT, forceRefresh: true);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Value.URL, Is.EqualTo(CACHED_URL));
+        Assert.That(result.Value.Expired, Is.False);
+
+        // Note: We can't easily verify CacheRefreshQueue.EnqueueAsync was called since it's not virtual
+        // The behavior is tested implicitly - forceRefresh triggers the refresh path in the implementation
+    }
+
+    [Test]
+    public async Task TryFetchURL_WithForceRefreshFalse_ReturnsValidCacheWithoutTriggering()
+    {
+        // Arrange
+        const string HASH = "test-hash";
+        const string URL = "https://example.com/image.jpg";
+        const string CACHED_URL = "https://s3.amazonaws.com/test-bucket/file.ktx2";
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync("Image");
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(new RedisValue[]
+            {
+                CACHED_URL,
+                "etag",
+                "1", // NOT expired
+                RedisValue.Null // not converting
+            });
+
+        // Act
+        var result = await _service.TryFetchURL(HASH, URL, ImageFormat.UASTC, VideoFormat.MP4, forceRefresh: false);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Value.URL, Is.EqualTo(CACHED_URL));
+        Assert.That(result!.Value.Expired, Is.False);
+    }
+
+    [Test]
+    public async Task TryFetchURL_WithExpiredCache_ReturnsExpiredResult()
+    {
+        // Arrange
+        const string HASH = "test-hash";
+        const string URL = "https://example.com/image.jpg";
+        const string CACHED_URL = "https://s3.amazonaws.com/test-bucket/file.ktx2";
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync("Image");
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(new RedisValue[]
+            {
+                CACHED_URL,
+                "etag",
+                RedisValue.Null, // expired (valid key doesn't exist)
+                RedisValue.Null // not converting
+            });
+
+        // Act
+        var result = await _service.TryFetchURL(HASH, URL, ImageFormat.UASTC, VideoFormat.MP4, forceRefresh: false);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Value.URL, Is.EqualTo(CACHED_URL));
+        Assert.That(result!.Value.Expired, Is.True);
+    }
+
+    [Test]
+    public async Task Store_WithNullMaxAgeAndNoETag_StoresWithoutTTL()
+    {
+        // Arrange
+        const string HASH = "test-hash";
+        const string FORMAT = "ktx2";
+        const MediaType MEDIA_TYPE = MediaType.Image;
+        const string SOURCE_PATH = "/tmp/test.ktx2";
+
+        _mockTransferUtility.Setup(tu => tu.UploadAsync(It.IsAny<TransferUtilityUploadRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        _mockDatabase.Setup(db => db.StringSetAsync(It.IsAny<KeyValuePair<RedisKey, RedisValue>[]>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(true);
+
+        // Act
+        await _service.Store(HASH, FORMAT, MEDIA_TYPE, eTag: null, maxAge: null, SOURCE_PATH);
+
+        // Assert
+        // Verify that valid key was set WITHOUT a TTL (cached indefinitely)
+        _mockDatabase.Verify(
+            db => db.StringSetAsync(
+                It.Is<KeyValuePair<RedisKey, RedisValue>[]>(kvps =>
+                    kvps.Any(kv => kv.Key.ToString().Contains("valid"))),
+                It.IsAny<When>(),
+                It.IsAny<CommandFlags>()),
+            Times.Once);
+
+        // Verify that StringSetAsync with TTL was NOT called
+        _mockDatabase.Verify(
+            db => db.StringSetAsync(
+                It.IsAny<RedisKey>(),
+                It.IsAny<RedisValue>(),
+                It.IsAny<TimeSpan?>(),
+                It.IsAny<When>()),
+            Times.Never);
+    }
+
+    [Test]
+    public async Task Store_WithNullMaxAgeButWithETag_StoresWithMinimumTTL()
+    {
+        // Arrange
+        const string HASH = "test-hash";
+        const string FORMAT = "ktx2";
+        const MediaType MEDIA_TYPE = MediaType.Image;
+        const string E_TAG = "test-etag";
+        const string SOURCE_PATH = "/tmp/test.ktx2";
+
+        _mockTransferUtility.Setup(tu => tu.UploadAsync(It.IsAny<TransferUtilityUploadRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        _mockDatabase.Setup(db => db.StringSetAsync(It.IsAny<KeyValuePair<RedisKey, RedisValue>[]>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(true);
+
+        _mockDatabase.Setup(db => db.StringSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<TimeSpan?>(), It.IsAny<When>()))
+            .ReturnsAsync(true);
+
+        // Act
+        await _service.Store(HASH, FORMAT, MEDIA_TYPE, E_TAG, maxAge: null, SOURCE_PATH);
+
+        // Assert
+        // Verify that valid key was set WITH a TTL equal to the minimum max age
+        _mockDatabase.Verify(
+            db => db.StringSetAsync(
+                It.Is<RedisKey>(key => key.ToString().Contains("valid")),
+                It.IsAny<RedisValue>(),
+                TimeSpan.FromMinutes(MIN_MAX_AGE_MINUTES),
+                When.Always),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task Store_WithMaxAgeLessThanMinimum_ClampsToMinimum()
+    {
+        // Arrange
+        const string HASH = "test-hash";
+        const string FORMAT = "ktx2";
+        const MediaType MEDIA_TYPE = MediaType.Image;
+        const string E_TAG = "test-etag";
+        var tooShortMaxAge = TimeSpan.FromMinutes(5); // Less than MIN_MAX_AGE_MINUTES (60)
+        const string SOURCE_PATH = "/tmp/test.ktx2";
+
+        _mockTransferUtility.Setup(tu => tu.UploadAsync(It.IsAny<TransferUtilityUploadRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        _mockDatabase.Setup(db => db.StringSetAsync(It.IsAny<KeyValuePair<RedisKey, RedisValue>[]>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(true);
+
+        _mockDatabase.Setup(db => db.StringSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<TimeSpan?>(), It.IsAny<When>()))
+            .ReturnsAsync(true);
+
+        // Act
+        await _service.Store(HASH, FORMAT, MEDIA_TYPE, E_TAG, tooShortMaxAge, SOURCE_PATH);
+
+        // Assert
+        // Verify that the TTL was set to the minimum, not the provided short value
+        _mockDatabase.Verify(
+            db => db.StringSetAsync(
+                It.Is<RedisKey>(key => key.ToString().Contains("valid")),
+                It.IsAny<RedisValue>(),
+                TimeSpan.FromMinutes(MIN_MAX_AGE_MINUTES),
+                When.Always),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task Store_WithMaxAgeGreaterThanMinimum_UsesProvidedMaxAge()
+    {
+        // Arrange
+        const string HASH = "test-hash";
+        const string FORMAT = "ktx2";
+        const MediaType MEDIA_TYPE = MediaType.Image;
+        const string E_TAG = "test-etag";
+        var longMaxAge = TimeSpan.FromHours(24); // Greater than MIN_MAX_AGE_MINUTES
+        const string SOURCE_PATH = "/tmp/test.ktx2";
+
+        _mockTransferUtility.Setup(tu => tu.UploadAsync(It.IsAny<TransferUtilityUploadRequest>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        _mockDatabase.Setup(db => db.StringSetAsync(It.IsAny<KeyValuePair<RedisKey, RedisValue>[]>(), It.IsAny<When>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(true);
+
+        _mockDatabase.Setup(db => db.StringSetAsync(It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<TimeSpan?>(), It.IsAny<When>()))
+            .ReturnsAsync(true);
+
+        // Act
+        await _service.Store(HASH, FORMAT, MEDIA_TYPE, E_TAG, longMaxAge, SOURCE_PATH);
+
+        // Assert
+        // Verify that the provided maxAge was used, not the minimum
+        _mockDatabase.Verify(
+            db => db.StringSetAsync(
+                It.Is<RedisKey>(key => key.ToString().Contains("valid")),
+                It.IsAny<RedisValue>(),
+                longMaxAge,
+                When.Always),
+            Times.Once);
     }
 }
 

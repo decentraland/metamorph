@@ -23,6 +23,7 @@ public static class BootstrapHelper
     private const string TEMP_DIRECTORY_NAME = "metamorph";
     private const string CONVERTED_DIRECTORY_NAME = "converted";
     private const string KTX2_MIME_TYPE = "image/ktx2";
+    private const string MP4_MIME_TYPE = "video/mp4";
 
     public static void SetupSerilog(this IHostApplicationBuilder builder)
     {
@@ -164,7 +165,13 @@ public static class BootstrapHelper
             {
                 Mappings =
                 {
-                    [".ktx2"] = KTX2_MIME_TYPE
+                    [".ktx2"] = KTX2_MIME_TYPE,
+                    [".UASTC"] = KTX2_MIME_TYPE,
+                    [".ASTC"] = KTX2_MIME_TYPE,
+                    [".ASTC_HIGH"] = KTX2_MIME_TYPE,
+                    [".mp4"] = MP4_MIME_TYPE,
+                    [".OGV"] = MP4_MIME_TYPE,
+                    [".MP4"] = MP4_MIME_TYPE,
                 }
             }
         });

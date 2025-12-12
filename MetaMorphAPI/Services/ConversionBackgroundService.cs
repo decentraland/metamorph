@@ -42,7 +42,7 @@ public class ConversionBackgroundService(
                 var conversionJob = await queue.Dequeue(ct);
 
                 logger.LogInformation(
-                    "Processing conversion {Hash} from {URL} (ImageFormat: {ImageFormat}, VideoFormat: {VideoFormat}",
+                    "Processing conversion {Hash} from {URL} (ImageFormat: {ImageFormat}, VideoFormat: {VideoFormat})",
                     conversionJob.Hash, conversionJob.URL, conversionJob.ImageFormat, conversionJob.VideoFormat);
 
                 // Download and convert

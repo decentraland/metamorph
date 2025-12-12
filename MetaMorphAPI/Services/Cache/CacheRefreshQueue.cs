@@ -34,4 +34,4 @@ public class CacheRefreshQueue
 }
 
 [SuppressMessage("ReSharper", "InconsistentNaming")]
-public readonly record struct CacheRefreshRequest(string Hash, string URL, ImageFormat ImageFormat, VideoFormat VideoFormat);
+public readonly record struct CacheRefreshRequest(string Hash, string URL, ImageFormat ImageFormat, VideoFormat VideoFormat, bool ForceRefresh);
