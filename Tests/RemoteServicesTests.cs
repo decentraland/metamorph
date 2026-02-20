@@ -36,6 +36,7 @@ public class RemoteCacheServiceTests
             _mockTransferUtility.Object,
             BUCKET_NAME,
             "https://s3.amazonaws.com/test-bucket/",
+            null,
             _mockDatabase.Object,
             _mockHttpClient.Object,
             _mockCacheRefreshQueue.Object,
@@ -82,6 +83,7 @@ public class RemoteCacheServiceTests
         // Arrange
         var serviceWithNullBucket = new RemoteCacheService(
             _mockTransferUtility.Object,
+            null,
             null,
             null,
             _mockDatabase.Object,
@@ -369,6 +371,177 @@ public class RemoteCacheServiceTests
                 TimeSpan.FromMinutes(MIN_MAX_AGE_MINUTES),
                 When.Always),
             Times.Once);
+    }
+
+    [Test]
+    public async Task TryFetchURL_WithCdnHostname_ReplaceS3AuthorityWithCdnHostname()
+    {
+        // Arrange
+        var cdnService = new RemoteCacheService(
+            _mockTransferUtility.Object,
+            BUCKET_NAME,
+            "https://s3.amazonaws.com/test-bucket/",
+            "cdn.example.com",
+            _mockDatabase.Object,
+            _mockHttpClient.Object,
+            _mockCacheRefreshQueue.Object,
+            _mockLogger.Object,
+            MIN_MAX_AGE_MINUTES);
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync("Image");
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(new RedisValue[]
+            {
+                "https://s3.amazonaws.com/test-bucket/file.ktx2",
+                "etag",
+                "1",
+                RedisValue.Null
+            });
+
+        // Act
+        var result = await cdnService.TryFetchURL("test-hash", "https://example.com/image.jpg",
+            ImageFormat.UASTC, VideoFormat.MP4, false);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Value.URL, Is.EqualTo("https://cdn.example.com/test-bucket/file.ktx2"));
+    }
+
+    [Test]
+    public async Task TryFetchURL_WithCdnHostnameContainingPort_ReplacesS3AuthorityWithCdnHostnameAndPort()
+    {
+        // Arrange
+        var cdnService = new RemoteCacheService(
+            _mockTransferUtility.Object,
+            BUCKET_NAME,
+            "https://s3.amazonaws.com/test-bucket/",
+            "cdn.example.com:8080",
+            _mockDatabase.Object,
+            _mockHttpClient.Object,
+            _mockCacheRefreshQueue.Object,
+            _mockLogger.Object,
+            MIN_MAX_AGE_MINUTES);
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync("Image");
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(new RedisValue[]
+            {
+                "https://s3.amazonaws.com/test-bucket/file.ktx2",
+                "etag",
+                "1",
+                RedisValue.Null
+            });
+
+        // Act
+        var result = await cdnService.TryFetchURL("test-hash", "https://example.com/image.jpg",
+            ImageFormat.UASTC, VideoFormat.MP4, false);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Value.URL, Is.EqualTo("https://cdn.example.com:8080/test-bucket/file.ktx2"));
+    }
+
+    [Test]
+    public async Task TryFetchURL_WithS3EndpointContainingPort_ReplacesBothHostAndPortWithCdnHostname()
+    {
+        // Arrange - S3 endpoint with a custom port (e.g. MinIO or LocalStack)
+        var cdnService = new RemoteCacheService(
+            _mockTransferUtility.Object,
+            BUCKET_NAME,
+            "https://localhost:9000/test-bucket/",
+            "cdn.example.com",
+            _mockDatabase.Object,
+            _mockHttpClient.Object,
+            _mockCacheRefreshQueue.Object,
+            _mockLogger.Object,
+            MIN_MAX_AGE_MINUTES);
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync("Image");
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(new RedisValue[]
+            {
+                "https://localhost:9000/test-bucket/file.ktx2",
+                "etag",
+                "1",
+                RedisValue.Null
+            });
+
+        // Act
+        var result = await cdnService.TryFetchURL("test-hash", "https://example.com/image.jpg",
+            ImageFormat.UASTC, VideoFormat.MP4, false);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Value.URL, Is.EqualTo("https://cdn.example.com/test-bucket/file.ktx2"));
+    }
+
+    [Test]
+    public async Task TryFetchURL_WithS3PortAndCdnPort_ReplacesBothCorrectly()
+    {
+        // Arrange - Both S3 endpoint and CDN hostname have ports
+        var cdnService = new RemoteCacheService(
+            _mockTransferUtility.Object,
+            BUCKET_NAME,
+            "https://localhost:9000/test-bucket/",
+            "cdn.example.com:443",
+            _mockDatabase.Object,
+            _mockHttpClient.Object,
+            _mockCacheRefreshQueue.Object,
+            _mockLogger.Object,
+            MIN_MAX_AGE_MINUTES);
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync("Image");
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(new RedisValue[]
+            {
+                "https://localhost:9000/test-bucket/file.ktx2",
+                "etag",
+                "1",
+                RedisValue.Null
+            });
+
+        // Act
+        var result = await cdnService.TryFetchURL("test-hash", "https://example.com/image.jpg",
+            ImageFormat.UASTC, VideoFormat.MP4, false);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Value.URL, Is.EqualTo("https://cdn.example.com:443/test-bucket/file.ktx2"));
+    }
+
+    [Test]
+    public async Task TryFetchURL_WithNullCdnHostname_ReturnsOriginalS3Url()
+    {
+        // Arrange - uses the default _service which has null CDN hostname
+        const string S3_URL = "https://s3.amazonaws.com/test-bucket/file.ktx2";
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync("Image");
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(new RedisValue[]
+            {
+                S3_URL,
+                "etag",
+                "1",
+                RedisValue.Null
+            });
+
+        // Act
+        var result = await _service.TryFetchURL("test-hash", "https://example.com/image.jpg",
+            ImageFormat.UASTC, VideoFormat.MP4, false);
+
+        // Assert
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Value.URL, Is.EqualTo(S3_URL));
     }
 
     [Test]

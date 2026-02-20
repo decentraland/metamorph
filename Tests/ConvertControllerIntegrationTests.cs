@@ -74,6 +74,7 @@ public class ConvertControllerIntegrationTests
             _mockTransferUtility.Object,
             BUCKET_NAME,
             S3_ENDPOINT,
+            null,
             _mockDatabase.Object,
             _mockHttpClient.Object,
             _cacheRefreshQueue,
@@ -375,6 +376,104 @@ public class ConvertControllerIntegrationTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
     
+    [Test]
+    public async Task Convert_WithCdnHostname_RedirectsToCdnUrl()
+    {
+        // Arrange - Create a controller stack with CDN hostname configured
+        var cdnCacheService = new RemoteCacheService(
+            _mockTransferUtility.Object,
+            BUCKET_NAME,
+            S3_ENDPOINT,
+            "cdn.example.com",
+            _mockDatabase.Object,
+            _mockHttpClient.Object,
+            _cacheRefreshQueue,
+            _mockCacheLogger.Object,
+            MIN_MAX_AGE_MINUTES);
+
+        var cdnStatusService = new ConversionStatusService(
+            cdnCacheService,
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromMilliseconds(100),
+            _mockStatusLogger.Object);
+
+        var cdnController = new ConvertController(
+            cdnCacheService,
+            _conversionQueue,
+            cdnStatusService,
+            _mockControllerLogger.Object);
+
+        // Mock cache hit
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync("Image");
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync([
+                CONVERTED_S3_URL,
+                "etag",
+                "1", // not expired
+                RedisValue.Null // not converting
+            ]);
+
+        // Act
+        var result = await cdnController.Convert(TEST_URL);
+
+        // Assert - URL should have S3 authority replaced with CDN hostname
+        var redirectResult = result as RedirectResult;
+        Assert.That(redirectResult, Is.Not.Null);
+        Assert.That(redirectResult!.Url, Is.EqualTo(
+            "https://cdn.example.com/test-bucket/20241201-120000-abcd1234-uastc.ktx2"));
+    }
+
+    [Test]
+    public async Task Convert_WithCdnHostnameWithPort_RedirectsToCdnUrlWithPort()
+    {
+        // Arrange - Create a controller stack with CDN hostname that includes a port
+        var cdnCacheService = new RemoteCacheService(
+            _mockTransferUtility.Object,
+            BUCKET_NAME,
+            S3_ENDPOINT,
+            "cdn.example.com:8443",
+            _mockDatabase.Object,
+            _mockHttpClient.Object,
+            _cacheRefreshQueue,
+            _mockCacheLogger.Object,
+            MIN_MAX_AGE_MINUTES);
+
+        var cdnStatusService = new ConversionStatusService(
+            cdnCacheService,
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromMilliseconds(100),
+            _mockStatusLogger.Object);
+
+        var cdnController = new ConvertController(
+            cdnCacheService,
+            _conversionQueue,
+            cdnStatusService,
+            _mockControllerLogger.Object);
+
+        // Mock cache hit
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync("Image");
+
+        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync([
+                CONVERTED_S3_URL,
+                "etag",
+                "1", // not expired
+                RedisValue.Null // not converting
+            ]);
+
+        // Act
+        var result = await cdnController.Convert(TEST_URL);
+
+        // Assert
+        var redirectResult = result as RedirectResult;
+        Assert.That(redirectResult, Is.Not.Null);
+        Assert.That(redirectResult!.Url, Is.EqualTo(
+            "https://cdn.example.com:8443/test-bucket/20241201-120000-abcd1234-uastc.ktx2"));
+    }
+
     [Test]
     public async Task Convert_ConvertingInProgress_RedirectsToOriginalWithoutQueuing()
     {
