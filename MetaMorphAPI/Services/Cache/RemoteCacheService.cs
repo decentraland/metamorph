@@ -13,6 +13,7 @@ public class RemoteCacheService(
     ITransferUtility? s3,
     string? s3Bucket,
     string? s3Endpoint,
+    string? cdnHostname,
     IDatabase redis,
     HttpClient httpClient,
     CacheRefreshQueue cacheRefreshQueue,
@@ -21,6 +22,7 @@ public class RemoteCacheService(
     : ICacheService
 {
     private readonly TimeSpan _minMaxAge = TimeSpan.FromMinutes(minMaxAgeMinutes);
+    private readonly string? _s3Authority = s3Endpoint == null ? null : new Uri(s3Endpoint).Authority;
 
     /// <summary>
     /// Uploads the converted file to S3 and stores the S3 URL in Redis under the provided hash.
@@ -182,6 +184,12 @@ public class RemoteCacheService(
         var eTag = results[1].IsNullOrEmpty ? null : results[1].ToString();
         var expired = results[2].IsNullOrEmpty;
         var converting = !results[3].IsNullOrEmpty;
+        
+        // Convert S3 URL to CDN URL if necessary
+        if (cdnHostname != null && _s3Authority != null && cachedUrl != null)
+        {
+            cachedUrl = cachedUrl.Replace(_s3Authority, cdnHostname);
+        }
 
         return cachedUrl == null ? null : new CacheResult(cachedUrl, eTag, expired, converting, format);
     }

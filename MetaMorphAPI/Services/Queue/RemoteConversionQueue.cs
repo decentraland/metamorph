@@ -29,6 +29,8 @@ public class RemoteConversionQueue(
             return;
         }
 
+        logger.LogInformation("Queuing conversion for {Hash} ({ImageFormat} | {VideoFormat}) from {URL}", job.Hash, job.ImageFormat, job.VideoFormat, job.URL);
+
         var messageBody = JsonSerializer.Serialize(job);
         var request = new SendMessageRequest
         {

@@ -38,7 +38,6 @@ public class ConvertController(
 
         if (cacheResult == null)
         {
-            logger.LogInformation("Queuing conversion for {Hash} ({ImageFormat} | {VideoFormat}", hash, imageFormat, videoFormat);
             await conversionQueue.Enqueue(new ConversionJob(hash, url, imageFormat, videoFormat));
 
             // If wait is requested, wait for conversion
@@ -62,7 +61,7 @@ public class ConvertController(
         }
 
         // Redirect to original
-        logger.LogInformation("No conversion for {Hash}, redirecting to original URL", hash);
+        logger.LogInformation("No conversion for {Hash}, redirecting to original URL: {URL}", hash, url);
         return Redirect(url);
     }
 
