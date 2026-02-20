@@ -5,10 +5,10 @@ namespace MetaMorphAPI.Services.Cache;
 
 public static class RedisKeys
 {
-    private const int VERSION = 2;
+    private const int VERSION = 3;
     
     public static RedisKey GetFileTypeKey(string hash) => new($"filetype:{hash}_{VERSION}");
-    public static RedisKey GetURLKey(string hash, string format) => new($"{hash}_{format}_{VERSION}");
+    public static RedisKey GetS3Key(string hash, string format) => new($"s3:{hash}_{format}_{VERSION}");
     public static RedisKey GetConvertingKey(string hash, ImageFormat imageFormat, VideoFormat videoFormat) => new($"converting:{hash}-{imageFormat}-{videoFormat}_{VERSION}");
     public static RedisKey GetETagKey(string hash, string format) => new($"etag:{hash}_{format}_{VERSION}");
     public static RedisKey GetValidKey(string hash, string format) => new($"valid:{hash}_{format}_{VERSION}");

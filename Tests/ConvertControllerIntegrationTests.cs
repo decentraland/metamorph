@@ -45,7 +45,7 @@ public class ConvertControllerIntegrationTests
     private const string QUEUE_NAME = "test-queue";
     private const string QUEUE_URL = "https://sqs.amazonaws.com/123456789012/test-queue";
     private const string TEST_URL = "https://example.com/image.jpg";
-    private const string CONVERTED_S3_URL = "https://s3.amazonaws.com/test-bucket/20241201-120000-abcd1234-uastc.ktx2";
+    private const string CONVERTED_S3_KEY = "20241201-120000-abcd1234-uastc.ktx2";
     private const int MIN_MAX_AGE_MINUTES = 60;
     
     [SetUp]
@@ -74,7 +74,6 @@ public class ConvertControllerIntegrationTests
             _mockTransferUtility.Object,
             BUCKET_NAME,
             S3_ENDPOINT,
-            null,
             _mockDatabase.Object,
             _mockHttpClient.Object,
             _cacheRefreshQueue,
@@ -154,27 +153,27 @@ public class ConvertControllerIntegrationTests
         _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync(() => dataCallCount++ == 0 
                 ? [RedisValue.Null, RedisValue.Null, RedisValue.Null, RedisValue.Null] // Initial miss
-                : [CONVERTED_S3_URL, "etag123", "1", RedisValue.Null]); // Success during polling
-        
+                : [CONVERTED_S3_KEY, "etag123", "1", RedisValue.Null]); // Success during polling
+
         // Mock successful queue operation
         _mockDatabase.Setup(db => db.StringSetAsync(
-            It.Is<RedisKey>(key => key.ToString().StartsWith("converting:")), 
-            It.IsAny<RedisValue>(), 
-            It.IsAny<TimeSpan?>(), 
+            It.Is<RedisKey>(key => key.ToString().StartsWith("converting:")),
+            It.IsAny<RedisValue>(),
+            It.IsAny<TimeSpan?>(),
             When.NotExists))
             .ReturnsAsync(true);
-        
+
         // Mock successful SQS send
         _mockSqsClient.Setup(sqs => sqs.SendMessageAsync(It.IsAny<SendMessageRequest>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new SendMessageResponse());
-        
+
         // Act
         var result = await _controller.Convert(TEST_URL, wait: true);
-        
+
         // Assert
         var redirectResult = result as RedirectResult;
         Assert.That(redirectResult, Is.Not.Null);
-        Assert.That(redirectResult!.Url, Is.EqualTo(CONVERTED_S3_URL)); // Should redirect to converted URL
+        Assert.That(redirectResult!.Url, Is.EqualTo(S3_ENDPOINT + CONVERTED_S3_KEY)); // Should redirect to converted URL
         
         // Verify job was queued
         _mockSqsClient.Verify(sqs => sqs.SendMessageAsync(
@@ -188,28 +187,28 @@ public class ConvertControllerIntegrationTests
     public async Task Convert_ExistingCachedUrlNotExpired_RedirectsToConvertedUrl()
     {
         // Arrange
-        const string CACHED_URL = "https://s3.amazonaws.com/test-bucket/cached-file.ktx2";
+        const string S3_KEY = "cached-file.ktx2";
         const string E_TAG = "cached-etag";
-        
+
         // Mock cache hit with valid (not expired) data
         _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync("Image");
-        
+
         _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync([
-                CACHED_URL,
+                S3_KEY,
                 E_TAG,
                 "1", // not expired (valid key exists)
                 RedisValue.Null // not converting
             ]);
-        
+
         // Act
         var result = await _controller.Convert(TEST_URL);
-        
+
         // Assert
         var redirectResult = result as RedirectResult;
         Assert.That(redirectResult, Is.Not.Null);
-        Assert.That(redirectResult!.Url, Is.EqualTo(CACHED_URL));
+        Assert.That(redirectResult!.Url, Is.EqualTo(S3_ENDPOINT + S3_KEY));
         
         // Verify no queue operations occurred
         _mockSqsClient.Verify(sqs => sqs.SendMessageAsync(It.IsAny<SendMessageRequest>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -219,28 +218,28 @@ public class ConvertControllerIntegrationTests
     public async Task Convert_ExistingCachedUrlExpired_RedirectsToConvertedUrlAndTriggersRefresh()
     {
         // Arrange
-        const string CACHED_URL = "https://s3.amazonaws.com/test-bucket/expired-file.ktx2";
+        const string S3_KEY = "expired-file.ktx2";
         const string E_TAG = "expired-etag";
-        
+
         // Mock cache hit with expired data
         _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync("Image");
-        
+
         _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync([
-                CACHED_URL,
+                S3_KEY,
                 E_TAG,
                 RedisValue.Null, // expired (valid key doesn't exist)
                 RedisValue.Null // not converting
             ]);
-        
+
         // Act
         var result = await _controller.Convert(TEST_URL);
-        
+
         // Assert
         var redirectResult = result as RedirectResult;
         Assert.That(redirectResult, Is.Not.Null);
-        Assert.That(redirectResult!.Url, Is.EqualTo(CACHED_URL));
+        Assert.That(redirectResult!.Url, Is.EqualTo(S3_ENDPOINT + S3_KEY));
         
         // Note: Cache refresh happens in background, so we can't easily verify it in this test
         // The important thing is that we still get the cached result immediately
@@ -377,14 +376,14 @@ public class ConvertControllerIntegrationTests
     }
     
     [Test]
-    public async Task Convert_WithCdnHostname_RedirectsToCdnUrl()
+    public async Task Convert_WithCdnEndpoint_RedirectsToCdnUrl()
     {
-        // Arrange - Create a controller stack with CDN hostname configured
+        // Arrange - Create a controller stack with CDN endpoint configured
+        const string CDN_ENDPOINT = "https://cdn.example.com/";
         var cdnCacheService = new RemoteCacheService(
             _mockTransferUtility.Object,
             BUCKET_NAME,
-            S3_ENDPOINT,
-            "cdn.example.com",
+            CDN_ENDPOINT,
             _mockDatabase.Object,
             _mockHttpClient.Object,
             _cacheRefreshQueue,
@@ -409,7 +408,7 @@ public class ConvertControllerIntegrationTests
 
         _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync([
-                CONVERTED_S3_URL,
+                CONVERTED_S3_KEY,
                 "etag",
                 "1", // not expired
                 RedisValue.Null // not converting
@@ -418,87 +417,37 @@ public class ConvertControllerIntegrationTests
         // Act
         var result = await cdnController.Convert(TEST_URL);
 
-        // Assert - URL should have S3 authority replaced with CDN hostname
+        // Assert - URL should be CDN endpoint prepended to S3 key
         var redirectResult = result as RedirectResult;
         Assert.That(redirectResult, Is.Not.Null);
-        Assert.That(redirectResult!.Url, Is.EqualTo(
-            "https://cdn.example.com/test-bucket/20241201-120000-abcd1234-uastc.ktx2"));
-    }
-
-    [Test]
-    public async Task Convert_WithCdnHostnameWithPort_RedirectsToCdnUrlWithPort()
-    {
-        // Arrange - Create a controller stack with CDN hostname that includes a port
-        var cdnCacheService = new RemoteCacheService(
-            _mockTransferUtility.Object,
-            BUCKET_NAME,
-            S3_ENDPOINT,
-            "cdn.example.com:8443",
-            _mockDatabase.Object,
-            _mockHttpClient.Object,
-            _cacheRefreshQueue,
-            _mockCacheLogger.Object,
-            MIN_MAX_AGE_MINUTES);
-
-        var cdnStatusService = new ConversionStatusService(
-            cdnCacheService,
-            TimeSpan.FromSeconds(5),
-            TimeSpan.FromMilliseconds(100),
-            _mockStatusLogger.Object);
-
-        var cdnController = new ConvertController(
-            cdnCacheService,
-            _conversionQueue,
-            cdnStatusService,
-            _mockControllerLogger.Object);
-
-        // Mock cache hit
-        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
-            .ReturnsAsync("Image");
-
-        _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
-            .ReturnsAsync([
-                CONVERTED_S3_URL,
-                "etag",
-                "1", // not expired
-                RedisValue.Null // not converting
-            ]);
-
-        // Act
-        var result = await cdnController.Convert(TEST_URL);
-
-        // Assert
-        var redirectResult = result as RedirectResult;
-        Assert.That(redirectResult, Is.Not.Null);
-        Assert.That(redirectResult!.Url, Is.EqualTo(
-            "https://cdn.example.com:8443/test-bucket/20241201-120000-abcd1234-uastc.ktx2"));
+        Assert.That(redirectResult!.Url, Is.EqualTo(CDN_ENDPOINT + CONVERTED_S3_KEY));
     }
 
     [Test]
     public async Task Convert_ConvertingInProgress_RedirectsToOriginalWithoutQueuing()
     {
-        // Arrange  
-        const string CACHED_URL = "https://s3.amazonaws.com/test-bucket/in-progress.ktx2";
-        
+        // Arrange
+        const string S3_KEY = "in-progress.ktx2";
+
         // Mock cache hit showing conversion in progress
         _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync("Image");
-        
+
         _mockDatabase.Setup(db => db.StringGetAsync(It.IsAny<RedisKey[]>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync([
-                CACHED_URL,
+                S3_KEY,
                 "in-progress-etag",
-                RedisValue.Null, // expired 
+                RedisValue.Null, // expired
                 "1" // converting flag set
             ]);
-        
+
         // Act
         var result = await _controller.Convert(TEST_URL);
-        
+
         // Assert
         var redirectResult = result as RedirectResult;
         Assert.That(redirectResult, Is.Not.Null);
-        Assert.That(redirectResult!.Url, Is.EqualTo(CACHED_URL));
+        Assert.That(redirectResult!.Url, Is.EqualTo(S3_ENDPOINT + S3_KEY));
         
         // Verify no additional job was queued since conversion is already in progress
         _mockSqsClient.Verify(sqs => sqs.SendMessageAsync(It.IsAny<SendMessageRequest>(), It.IsAny<CancellationToken>()), Times.Never);

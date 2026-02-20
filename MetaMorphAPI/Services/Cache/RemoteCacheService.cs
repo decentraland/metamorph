@@ -12,8 +12,7 @@ namespace MetaMorphAPI.Services.Cache;
 public class RemoteCacheService(
     ITransferUtility? s3,
     string? s3Bucket,
-    string? s3Endpoint,
-    string? cdnHostname,
+    string? cdnEndpoint,
     IDatabase redis,
     HttpClient httpClient,
     CacheRefreshQueue cacheRefreshQueue,
@@ -22,7 +21,6 @@ public class RemoteCacheService(
     : ICacheService
 {
     private readonly TimeSpan _minMaxAge = TimeSpan.FromMinutes(minMaxAgeMinutes);
-    private readonly string? _s3Authority = s3Endpoint == null ? null : new Uri(s3Endpoint).Authority;
 
     /// <summary>
     /// Uploads the converted file to S3 and stores the S3 URL in Redis under the provided hash.
@@ -30,7 +28,7 @@ public class RemoteCacheService(
     public async Task Store(string hash, string format, MediaType mediaType, string? eTag, TimeSpan? maxAge,
                             string sourcePath)
     {
-        if (s3Bucket == null || s3 == null || s3Endpoint == null)
+        if (s3Bucket == null || s3 == null)
         {
             throw new InvalidOperationException("S3 has not been configured, you can't use Store(...)");
         }
@@ -64,19 +62,16 @@ public class RemoteCacheService(
             throw;
         }
 
-        // Construct the S3 URL
-        var s3Url = s3Endpoint + s3Key;
-
         // Sanitize max age
         maxAge = SanitizeMaxAge(maxAge, eTag);
 
         // Store the hash to S3 URL mapping in Redis
-        logger.LogInformation("Sending to redis: {Key}:{S3Url}, etag:{ETag}, maxAge:{MaxAge}", hash, s3Url, eTag,
+        logger.LogInformation("Sending to redis: {Key}:{S3Url}, etag:{ETag}, maxAge:{MaxAge}", hash, s3Key, eTag,
             maxAge?.ToString());
 
         var keys = new List<RedisKVP>(3)
         {
-            new(RedisKeys.GetURLKey(hash, format), s3Url),
+            new(RedisKeys.GetS3Key(hash, format), s3Key),
             new(RedisKeys.GetFileTypeKey(hash), mediaType.ToString())
         };
 
@@ -107,7 +102,12 @@ public class RemoteCacheService(
     public async Task<CacheResult?> TryFetchURL(string hash, string? url,
                                                 ImageFormat imageFormat, VideoFormat videoFormat, bool forceRefresh)
     {
-        var cacheResult = await GetCacheData(hash, imageFormat, videoFormat);
+        if (cdnEndpoint == null)
+        {
+            throw new InvalidOperationException("CDNEndpoint has not been configured, you can't use TryFetchURL(...)");
+        }
+        
+        var cacheResult = await GetCacheData(hash, imageFormat, videoFormat, cdnEndpoint);
 
         if (cacheResult == null)
         {
@@ -129,7 +129,7 @@ public class RemoteCacheService(
     /// <returns>True if the conversion is still valid, false otherwise.</returns>
     public async Task<bool> Revalidate(string hash, string url, ImageFormat imageFormat, VideoFormat videoFormat, bool forceRefresh, CancellationToken ct)
     {
-        if (await GetCacheData(hash, imageFormat, videoFormat) is { } result)
+        if (await GetCacheData(hash, imageFormat, videoFormat, null) is { } result)
         {
             if (!forceRefresh && !result.Expired) return true;
 
@@ -160,7 +160,7 @@ public class RemoteCacheService(
         return false;
     }
 
-    private async Task<CacheResult?> GetCacheData(string hash, ImageFormat imageFormat, VideoFormat videoFormat)
+    private async Task<CacheResult?> GetCacheData(string hash, ImageFormat imageFormat, VideoFormat videoFormat, string? endpoint)
     {
         var storedFileType = await redis.StringGetAsync(RedisKeys.GetFileTypeKey(hash));
 
@@ -173,25 +173,19 @@ public class RemoteCacheService(
 
         var results = await redis.StringGetAsync(
             [
-                RedisKeys.GetURLKey(hash, format),
+                RedisKeys.GetS3Key(hash, format),
                 RedisKeys.GetETagKey(hash, format),
                 RedisKeys.GetValidKey(hash, format),
                 RedisKeys.GetConvertingKey(hash, imageFormat, videoFormat)
             ]
         );
 
-        var cachedUrl = results[0].IsNullOrEmpty ? null : results[0].ToString();
+        var s3Key = results[0].IsNullOrEmpty ? null : results[0].ToString();
         var eTag = results[1].IsNullOrEmpty ? null : results[1].ToString();
         var expired = results[2].IsNullOrEmpty;
         var converting = !results[3].IsNullOrEmpty;
-        
-        // Convert S3 URL to CDN URL if necessary
-        if (cdnHostname != null && _s3Authority != null && cachedUrl != null)
-        {
-            cachedUrl = cachedUrl.Replace(_s3Authority, cdnHostname);
-        }
 
-        return cachedUrl == null ? null : new CacheResult(cachedUrl, eTag, expired, converting, format);
+        return s3Key == null ? null : new CacheResult(endpoint + s3Key, eTag, expired, converting, format);
     }
 
     /// <summary>
