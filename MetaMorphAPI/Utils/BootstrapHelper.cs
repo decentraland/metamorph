@@ -107,7 +107,7 @@ public static class BootstrapHelper
         builder.Services.AddSingleton<IConversionQueue, LocalConversionQueue>();
     }
 
-    public static void SetupRemoteCache(this IHostApplicationBuilder builder, bool setupS3)
+    public static void SetupRemoteCache(this IHostApplicationBuilder builder, bool setupS3, bool setupCdn)
     {
         builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
 
@@ -142,7 +142,7 @@ public static class BootstrapHelper
         {
             var s3TransferUtility = setupS3 ? new TransferUtility(sp.GetRequiredService<IAmazonS3>()) : null;
             var s3BucketName = setupS3 ? builder.GetRequiredConfig<string>("AWS:S3BucketName") : null;
-            var cdnEndpoint = builder.GetRequiredConfig<string>("MetaMorph:CDNHostname");
+            var cdnEndpoint = setupCdn ? builder.GetRequiredConfig<string>("MetaMorph:CDNHostname") : null;
 
             return new RemoteCacheService(
                 s3TransferUtility,

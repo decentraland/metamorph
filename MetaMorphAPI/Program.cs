@@ -37,7 +37,7 @@ if (localCache)
 else
 {
     builder.SetupRemoteCache(localWorker ||
-                             builder.Environment.IsDevelopment()); // With local worker we need to setup S3
+                             builder.Environment.IsDevelopment(), true); // With local worker we need to setup S3
 }
 
 // Setup ConversionStatusService (needed for wait parameter support)

@@ -13,7 +13,7 @@ builder.Services.AddHttpClient();
 
 builder.SetupSerilog();
 builder.SetupConverter();
-builder.SetupRemoteCache(true);
+builder.SetupRemoteCache(true, false);
 builder.SetupHealthChecks();
 
 var app = builder.Build();
