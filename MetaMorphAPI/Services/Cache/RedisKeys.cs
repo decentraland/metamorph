@@ -5,7 +5,7 @@ namespace MetaMorphAPI.Services.Cache;
 
 public static class RedisKeys
 {
-    private const int VERSION = 1;
+    private const int VERSION = 2;
     
     public static RedisKey GetFileTypeKey(string hash) => new($"filetype:{hash}_{VERSION}");
     public static RedisKey GetURLKey(string hash, string format) => new($"{hash}_{format}_{VERSION}");
