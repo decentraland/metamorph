@@ -142,7 +142,7 @@ public static class BootstrapHelper
         {
             var s3TransferUtility = setupS3 ? new TransferUtility(sp.GetRequiredService<IAmazonS3>()) : null;
             var s3BucketName = setupS3 ? builder.GetRequiredConfig<string>("AWS:S3BucketName") : null;
-            var cdnEndpoint = setupCdn ? builder.GetRequiredConfig<string>("MetaMorph:CDNHostname") : null;
+            var cdnEndpoint = setupCdn ? builder.GetRequiredConfig<string>("MetaMorph:CDNEndpoint") : null;
 
             return new RemoteCacheService(
                 s3TransferUtility,
