@@ -54,6 +54,8 @@ public class RemoteCacheService(
                 ContentType = contentType
             };
 
+            uploadRequest.Headers.CacheControl = "public, max-age=31536000, immutable";
+
             await s3.UploadAsync(uploadRequest);
         }
         catch (Exception ex)
