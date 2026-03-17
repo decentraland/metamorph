@@ -11,6 +11,18 @@ if (builder.Environment.IsProduction())
 
 builder.Services.AddHttpClient();
 
+// Configure CORS
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins("https://decentraland.org", "https://*.decentraland.org")
+              .SetIsOriginAllowedToAllowWildcardSubdomains()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 // Configure logging
 builder.SetupSerilog();
 
@@ -60,6 +72,9 @@ if (!localCache && app.Environment.IsDevelopment())
 
 // Metrics
 app.SetupMetrics();
+
+// CORS
+app.UseCors();
 
 // Map API controllers
 app.MapControllers();
