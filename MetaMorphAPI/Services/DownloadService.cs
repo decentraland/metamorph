@@ -12,10 +12,11 @@ public class DownloadService(string tempDirectory, HttpClient httpClient, long m
     /// <summary>
     /// Downloads a file from URL and saves it to <see cref="tempDirectory"/> with <see cref="hash"/> filename.
     /// </summary>
-    public async Task<(string path, string? eTag, TimeSpan? maxAge)> DownloadFile(string url, string hash)
+    public async Task<(string path, string? eTag, TimeSpan? maxAge)> DownloadFile(string url, string hash,
+        CancellationToken ct = default)
     {
         using var response =
-            await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+            await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
 
         if (!response.IsSuccessStatusCode)
             throw new Exception(
@@ -39,16 +40,16 @@ public class DownloadService(string tempDirectory, HttpClient httpClient, long m
                 BUFFER_SIZE,
                 FileOptions.Asynchronous | FileOptions.SequentialScan
             );
-            await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+            await using var responseStream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
             long totalBytesRead = 0;
             int bytesRead;
-            while ((bytesRead = await responseStream.ReadAsync(buffer.AsMemory()).ConfigureAwait(false)) > 0)
+            while ((bytesRead = await responseStream.ReadAsync(buffer.AsMemory(), ct).ConfigureAwait(false)) > 0)
             {
                 totalBytesRead += bytesRead;
                 if (totalBytesRead > maxFileSizeBytes)
                     throw new Exception(
                         $"Downloaded data exceeded the maximum allowed size of {maxFileSizeBytes} bytes.");
-                await fs.WriteAsync(buffer.AsMemory(0, bytesRead));
+                await fs.WriteAsync(buffer.AsMemory(0, bytesRead), ct);
             }
         }
         catch

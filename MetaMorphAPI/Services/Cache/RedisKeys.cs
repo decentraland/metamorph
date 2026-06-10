@@ -13,6 +13,10 @@ public static class RedisKeys
     public static RedisKey GetETagKey(string hash, string format) => new($"etag:{hash}_{format}_{VERSION}");
     public static RedisKey GetValidKey(string hash, string format) => new($"valid:{hash}_{format}_{VERSION}");
 
+    // Per-host circuit breaker (source reachability)
+    public static RedisKey GetUnhealthyHostKey(string host) => new($"unhealthyhost:{host}_{VERSION}");
+    public static RedisKey GetHostFailureKey(string host) => new($"hostfailures:{host}_{VERSION}");
+
     public static string GetFormatString(MediaType mediaType, ImageFormat imageFormat, VideoFormat videoFormat) =>
         mediaType switch
         {

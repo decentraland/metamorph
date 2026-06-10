@@ -25,6 +25,23 @@ public static class BootstrapHelper
     private const string KTX2_MIME_TYPE = "image/ktx2";
     private const string MP4_MIME_TYPE = "video/mp4";
 
+    /// <summary>
+    /// Registers the default HttpClient with a short connection timeout so downloads from
+    /// unreachable hosts fail fast at the connect phase, without shortening the overall
+    /// transfer budget that large (but reachable) files may need.
+    /// </summary>
+    public static void SetupHttpClient(this IHostApplicationBuilder builder)
+    {
+        var connectTimeout = TimeSpan.FromSeconds(builder.GetRequiredConfig<int>("MetaMorph:ConnectTimeoutSeconds"));
+
+        builder.Services.AddHttpClient();
+        builder.Services.ConfigureHttpClientDefaults(b =>
+            b.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                ConnectTimeout = connectTimeout
+            }));
+    }
+
     public static void SetupSerilog(this IHostApplicationBuilder builder)
     {
         // Bootstrap the static Serilog logger for use in Program.cs
@@ -83,9 +100,35 @@ public static class BootstrapHelper
                 sp.GetRequiredService<ConverterService>(),
                 sp.GetRequiredService<DownloadService>(),
                 sp.GetRequiredService<ICacheService>(),
+                sp.GetRequiredService<IHostHealthService>(),
                 builder.GetRequiredConfig<int>("MetaMorph:ConcurrentConversions"),
                 sp.GetRequiredService<ILogger<ConversionBackgroundService>>()
             ));
+    }
+
+    /// <summary>
+    /// Registers the per-host circuit breaker. Redis-backed when available (shared across worker
+    /// tasks), otherwise in-memory for single-process local mode.
+    /// </summary>
+    private static void RegisterHostHealth(IHostApplicationBuilder builder, bool redisBacked)
+    {
+        var threshold = builder.GetRequiredConfig<int>("MetaMorph:HostHealth:FailureThreshold");
+        var window = TimeSpan.FromSeconds(builder.GetRequiredConfig<int>("MetaMorph:HostHealth:FailureWindowSeconds"));
+        var cooldown = TimeSpan.FromSeconds(builder.GetRequiredConfig<int>("MetaMorph:HostHealth:CooldownSeconds"));
+
+        if (redisBacked)
+        {
+            builder.Services.AddSingleton<IHostHealthService>(sp =>
+                new RedisHostHealthService(
+                    sp.GetRequiredService<IDatabase>(),
+                    threshold, window, cooldown,
+                    sp.GetRequiredService<ILogger<RedisHostHealthService>>()));
+        }
+        else
+        {
+            builder.Services.AddSingleton<IHostHealthService>(_ =>
+                new InMemoryHostHealthService(threshold, window, cooldown));
+        }
     }
 
     internal static void SetupLocalCache(this WebApplicationBuilder builder)
@@ -105,6 +148,8 @@ public static class BootstrapHelper
                 sp.GetRequiredService<ILogger<LocalCacheService>>()));
 
         builder.Services.AddSingleton<IConversionQueue, LocalConversionQueue>();
+
+        RegisterHostHealth(builder, redisBacked: false);
     }
 
     public static void SetupRemoteCache(this IHostApplicationBuilder builder, bool setupS3, bool setupCdn)
@@ -117,6 +162,9 @@ public static class BootstrapHelper
 
         // Redis
         builder.Services.AddSingleton<IDatabase>(_ => ConnectionMultiplexer.Connect(redisConnectionString).GetDatabase());
+
+        // Per-host circuit breaker (shared across worker tasks via Redis)
+        RegisterHostHealth(builder, redisBacked: true);
 
         // SQS
         builder.Services.AddAWSService<IAmazonSQS>();
