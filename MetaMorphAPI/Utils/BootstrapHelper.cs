@@ -71,11 +71,15 @@ public static class BootstrapHelper
                 sp.GetRequiredService<ILogger<ConverterService>>()));
 
         builder.Services.AddSingleton<DownloadService>(sp =>
-            new DownloadService(
+        {
+            var httpClient = sp.GetRequiredService<HttpClient>();
+            httpClient.Timeout = TimeSpan.FromSeconds(builder.GetRequiredConfig<int>("MetaMorph:DownloadTimeoutSeconds"));
+            return new DownloadService(
                 tempDirectory,
-                sp.GetRequiredService<HttpClient>(),
+                httpClient,
                 builder.GetRequiredConfig<int>("MetaMorph:MaxDownloadFileSizeMB") * 1024L * 1024L
-            ));
+            );
+        });
 
         builder.Services.AddHostedService<ConversionBackgroundService>(sp =>
             new ConversionBackgroundService(
