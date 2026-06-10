@@ -72,7 +72,16 @@ public class ConversionBackgroundService(
                 }
                 catch when (host != null && !ct.IsCancellationRequested)
                 {
-                    await hostHealth.RecordFailure(host);
+                    // Don't let breaker bookkeeping (e.g. Redis unreachable) mask the real download error.
+                    try
+                    {
+                        await hostHealth.RecordFailure(host);
+                    }
+                    catch (Exception bookkeepingError)
+                    {
+                        logger.LogWarning(bookkeepingError, "Failed to record host failure for {Host}", host);
+                    }
+
                     throw;
                 }
 

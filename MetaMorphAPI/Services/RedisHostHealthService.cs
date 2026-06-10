@@ -26,13 +26,20 @@ public class RedisHostHealthService(
     public async Task RecordFailure(string host)
     {
         var failureKey = RedisKeys.GetHostFailureKey(host);
-        var failures = await redis.StringIncrementAsync(failureKey);
 
-        // Refresh the sliding window on every failure so the counter stays alive through a
-        // sustained outage. Otherwise the counter expires mid-outage and the circuit needs a
-        // fresh batch of (expensive) failures to re-trip after each cooldown.
-        await redis.KeyExpireAsync(failureKey, failureWindow);
+        // INCR and the window refresh run in a single MULTI/EXEC, so a crash between them can't
+        // leave the counter without a TTL. The window is refreshed on every failure so the counter
+        // stays alive through a sustained outage (otherwise it expires mid-outage and the circuit
+        // needs a fresh batch of expensive failures to re-trip after each cooldown).
+        var transaction = redis.CreateTransaction();
+        var incrementTask = transaction.StringIncrementAsync(failureKey);
+        _ = transaction.KeyExpireAsync(failureKey, failureWindow);
+        await transaction.ExecuteAsync();
 
+        var failures = await incrementTask;
+
+        // The conditional open is a separate command (a transaction can't branch on the INCR result).
+        // If a crash lands between EXEC and this SET, the circuit simply opens on the next failure.
         if (failures >= failureThreshold)
         {
             logger.LogWarning(

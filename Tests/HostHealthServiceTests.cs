@@ -18,12 +18,16 @@ public class RedisHostHealthServiceTests
     private static readonly TimeSpan COOLDOWN = TimeSpan.FromSeconds(60);
 
     private Mock<IDatabase> _redis = null!;
+    private Mock<ITransaction> _transaction = null!;
     private RedisHostHealthService _service = null!;
 
     [SetUp]
     public void SetUp()
     {
         _redis = new Mock<IDatabase>();
+        _transaction = new Mock<ITransaction>();
+        _transaction.Setup(t => t.ExecuteAsync(It.IsAny<CommandFlags>())).ReturnsAsync(true);
+        _redis.Setup(r => r.CreateTransaction(It.IsAny<object>())).Returns(_transaction.Object);
         _service = new RedisHostHealthService(_redis.Object, THRESHOLD, WINDOW, COOLDOWN,
             NullLogger<RedisHostHealthService>.Instance);
     }
@@ -60,17 +64,21 @@ public class RedisHostHealthServiceTests
     }
 
     [Test]
-    public async Task RecordFailure_FirstFailure_StartsWindowAndDoesNotOpenCircuit()
+    public async Task RecordFailure_FirstFailure_RefreshesWindowAtomicallyAndDoesNotOpenCircuit()
     {
-        _redis.Setup(r => r.StringIncrementAsync(It.IsAny<RedisKey>(), It.IsAny<long>(), It.IsAny<CommandFlags>()))
+        _transaction.Setup(t => t.StringIncrementAsync(It.IsAny<RedisKey>(), It.IsAny<long>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync(1);
 
         await _service.RecordFailure(HOST);
 
-        // Window TTL is (re)set on the failure.
-        _redis.Verify(r => r.KeyExpireAsync(
+        // INCR + window refresh happen atomically inside a single MULTI/EXEC.
+        _transaction.Verify(t => t.StringIncrementAsync(
+            It.Is<RedisKey>(k => k == RedisKeys.GetHostFailureKey(HOST)), It.IsAny<long>(), It.IsAny<CommandFlags>()),
+            Times.Once);
+        _transaction.Verify(t => t.KeyExpireAsync(
             It.Is<RedisKey>(k => k == RedisKeys.GetHostFailureKey(HOST)),
             It.IsAny<TimeSpan?>(), It.IsAny<ExpireWhen>(), It.IsAny<CommandFlags>()), Times.Once);
+        _transaction.Verify(t => t.ExecuteAsync(It.IsAny<CommandFlags>()), Times.Once);
 
         // Below threshold, the circuit stays closed.
         _redis.Verify(r => r.StringSetAsync(
@@ -81,13 +89,13 @@ public class RedisHostHealthServiceTests
     [Test]
     public async Task RecordFailure_BelowThreshold_RefreshesWindowButDoesNotOpenCircuit()
     {
-        _redis.Setup(r => r.StringIncrementAsync(It.IsAny<RedisKey>(), It.IsAny<long>(), It.IsAny<CommandFlags>()))
-            .ReturnsAsync(2); // not the first failure, below threshold of 3
+        _transaction.Setup(t => t.StringIncrementAsync(It.IsAny<RedisKey>(), It.IsAny<long>(), It.IsAny<CommandFlags>()))
+            .ReturnsAsync(2); // below threshold of 3
 
         await _service.RecordFailure(HOST);
 
         // The sliding window is refreshed on every failure (keeps the counter alive through an outage).
-        _redis.Verify(r => r.KeyExpireAsync(
+        _transaction.Verify(t => t.KeyExpireAsync(
             It.Is<RedisKey>(k => k == RedisKeys.GetHostFailureKey(HOST)),
             It.IsAny<TimeSpan?>(), It.IsAny<ExpireWhen>(), It.IsAny<CommandFlags>()), Times.Once);
         // ...but the circuit stays closed below the threshold.
@@ -99,7 +107,7 @@ public class RedisHostHealthServiceTests
     [Test]
     public async Task RecordFailure_ReachingThreshold_OpensCircuitWithCooldownTtl()
     {
-        _redis.Setup(r => r.StringIncrementAsync(It.IsAny<RedisKey>(), It.IsAny<long>(), It.IsAny<CommandFlags>()))
+        _transaction.Setup(t => t.StringIncrementAsync(It.IsAny<RedisKey>(), It.IsAny<long>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync(THRESHOLD);
 
         await _service.RecordFailure(HOST);
@@ -114,7 +122,7 @@ public class RedisHostHealthServiceTests
     [Test]
     public async Task RecordFailure_AboveThreshold_KeepsCircuitOpen()
     {
-        _redis.Setup(r => r.StringIncrementAsync(It.IsAny<RedisKey>(), It.IsAny<long>(), It.IsAny<CommandFlags>()))
+        _transaction.Setup(t => t.StringIncrementAsync(It.IsAny<RedisKey>(), It.IsAny<long>(), It.IsAny<CommandFlags>()))
             .ReturnsAsync(THRESHOLD + 4);
 
         await _service.RecordFailure(HOST);
