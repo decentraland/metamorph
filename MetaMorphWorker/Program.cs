@@ -9,7 +9,7 @@ if (builder.Environment.IsProduction())
     builder.WebHost.UseSentry();
 }
 
-builder.Services.AddHttpClient();
+builder.SetupHttpClient();
 
 builder.SetupSerilog();
 builder.SetupConverter();
